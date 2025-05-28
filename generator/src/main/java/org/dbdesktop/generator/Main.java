@@ -1,4 +1,4 @@
-package org.dbdesktop;
+package org.dbdesktop.generator;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
