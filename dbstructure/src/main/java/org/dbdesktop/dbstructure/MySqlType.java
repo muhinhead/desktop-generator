@@ -4,17 +4,41 @@ import java.util.HashMap;
 
 public class MySqlType extends AbstractSqlType {
 
+    @Override
+    protected HashMap<String, String> getTypesHashMap() {
+        return new HashMap<String, String>() {
+            @Override
+            public String put(String key, String value) {
+                return super.put(key.toLowerCase(), value);
+            }
+
+            @Override
+            public String get(Object key) {
+                return super.get(key.toString().toLowerCase());
+            }
+
+            @Override
+            public boolean containsKey(Object key) {
+                return super.containsKey(key.toString().toLowerCase());
+            }
+
+            @Override
+            public String remove(Object key) {
+                return super.remove(key.toString().toLowerCase());
+            }
+        };
+    }
+
+    @Override
     protected void buildMap() {
-        sql2java = new HashMap<String, String>();
+        sql2java = getTypesHashMap();
         sql2java.put("int", "Integer");
-        sql2java.put("INT", "Integer");
         sql2java.put("bigint", "Integer");
         sql2java.put("bit", "Integer");
         sql2java.put("smallint", "Integer");
         sql2java.put("tinyint", "Integer");
         sql2java.put("numeric", "Integer");
         sql2java.put("number", "Integer");
-        sql2java.put("VARCHAR", "String");
         sql2java.put("varchar", "String");
         sql2java.put("varchar2", "String");
         sql2java.put("longvarchar", "String");
@@ -38,5 +62,4 @@ public class MySqlType extends AbstractSqlType {
     public MySqlType(String sqlType) {
         super(sqlType);
     }
-
 }

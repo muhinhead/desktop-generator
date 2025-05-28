@@ -14,6 +14,10 @@ public abstract class AbstractSqlType {
         this.setSqlType(sqlType);
     }
 
+    protected HashMap<String, String> getTypesHashMap() {
+        return new HashMap<String, String>();
+    }
+
     public static String getODBCfuncGetName(String prefix, String javaType, String postFix, int n) {
         if (javaType.equals("Integer")) {
             if (prefix.endsWith("get"))
