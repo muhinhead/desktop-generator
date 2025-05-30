@@ -20,6 +20,15 @@
     </properties>
 
     <dependencies>
+
+        <!-- JUnit 5 (Jupiter) API and Engine -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- MySQL JDBC Driver -->
         <dependency>
             <groupId>com.mysql</groupId>
