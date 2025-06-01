@@ -6,6 +6,8 @@ public class Table {
     private String name;
     public static HashMap<String, Table> allTables = new HashMap<String, Table>();
     private HashMap<String, Column> columns;
+    private Column primaryColumn;
+    private HashMap<String, ForeignKey> foreignKeys;
 
     public String getName() {
         return name;

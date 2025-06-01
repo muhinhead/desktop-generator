@@ -1,3 +1,4 @@
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.jupiter.api.TestInstance;
 
@@ -6,12 +7,13 @@ import java.sql.*;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 //@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@Ignore
 public class TableTest {
 
     private Connection connection;
 
     void setUp() throws SQLException {
-        String url = "jdbc:mysql://localhost:3306/vinyl?useSSL=false&serverTimezone=UTC";
+        String url = "jdbc:mysql://localhost:3306/vinyl?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC";
         String username = "nick";
         String password = "ghbdtnnt";
         connection = DriverManager.getConnection(url, username, password);

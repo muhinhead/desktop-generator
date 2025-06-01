@@ -1,5 +1,6 @@
 package org.dbdesktop.generator;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -43,12 +44,14 @@ public class Main {
         }
 
 
-        String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?useSSL=false&serverTimezone=UTC";
+        String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC";
 
         try (Connection conn = DriverManager.getConnection(url, username, password)) {
             System.out.println("✅ Successfully connected to the database.");
+            new ORMGenerator(conn).generateORMclasses(new File("./"));
         } catch (SQLException e) {
             System.err.println("❌ Connection failed: " + e.getMessage());
         }
+
     }
 }
