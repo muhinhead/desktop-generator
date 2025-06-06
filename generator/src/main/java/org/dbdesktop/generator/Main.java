@@ -1,9 +1,10 @@
 package org.dbdesktop.generator;
 
+import org.dbdesktop.dbstructure.MySqlType;
+
 import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.SQLException;
 
 public class Main {
     public static void main(@org.jetbrains.annotations.NotNull String[] args) {
@@ -48,8 +49,8 @@ public class Main {
 
         try (Connection conn = DriverManager.getConnection(url, username, password)) {
             System.out.println("✅ Successfully connected to the database.");
-            new ORMGenerator(conn).generateORMclasses(new File("./"));
-        } catch (SQLException e) {
+            new ORMGenerator(conn, MySqlType.class).generateORMclasses(new File("./target/generated-sources"));
+        } catch (Exception e) {
             System.err.println("❌ Connection failed: " + e.getMessage());
         }
 

@@ -8,7 +8,6 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Integer.parseInt;
 
@@ -46,6 +45,10 @@ public abstract class DbObject implements Serializable {
     public abstract Integer getPK_ID();
 
     public abstract void setPK_ID(Integer id) throws ForeignKeyViolationException;
+
+    public static String capitalizedString(String s) {
+        return s.substring(0,1).toUpperCase() + s.substring(1);
+    }
 
     public static DbObject[] load(Connection con, String whereCondition, String orderCondition)
             throws SQLException {

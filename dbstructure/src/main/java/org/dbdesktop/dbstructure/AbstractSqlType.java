@@ -3,9 +3,9 @@ package org.dbdesktop.dbstructure;
 import java.util.HashMap;
 
 public abstract class AbstractSqlType {
-    protected static HashMap<String, String> sql2java = null;
+    protected static HashMap<String, Class> sql2java = null;
     private String sqlType;
-    private String javaType;
+    private Class javaType;
 
     public AbstractSqlType(String sqlType) {
         if (sql2java == null) {
@@ -14,8 +14,8 @@ public abstract class AbstractSqlType {
         this.setSqlType(sqlType);
     }
 
-    protected HashMap<String, String> getTypesHashMap() {
-        return new HashMap<String, String>();
+    protected HashMap<String, Class> getTypesHashMap() {
+        return new HashMap<String, Class>();
     }
 
     public static String getODBCfuncGetName(String prefix, String javaType, String postFix, int n) {
@@ -36,10 +36,10 @@ public abstract class AbstractSqlType {
 
     public void setSqlType(String sqlType) {
         this.sqlType = sqlType;
-        javaType = (String) sql2java.get(sqlType);
+        javaType = sql2java.get(sqlType);
     }
 
-    public String getJavaType() {
+    public Class getJavaType() {
         return javaType;
     }
 
