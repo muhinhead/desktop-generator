@@ -2,8 +2,10 @@ package org.dbdesktop.generator;
 
 import com.squareup.javapoet.*;
 import org.dbdesktop.dbstructure.AbstractSqlType;
+import org.dbdesktop.orm.AbstractTriggers;
 import org.dbdesktop.orm.DbObject;
 import org.dbdesktop.orm.ForeignKeyViolationException;
+import org.dbdesktop.orm.TriggersAdapter;
 
 import javax.lang.model.element.Modifier;
 import java.io.File;
@@ -29,6 +31,7 @@ public class ORMGenerator {
 
     private List<FieldSpec> genFields(String tableName) throws Exception {
         List<FieldSpec> fields = new ArrayList<>();
+        fields.add(FieldSpec.builder(AbstractTriggers.class,"activeTriggers").addModifiers(Modifier.PROTECTED, Modifier.STATIC).build());
         for (String colNameType : getTablesFields(connection, tableName)) {
             int pointIndex = getPointIndex(colNameType);
             fields.add(FieldSpec.builder(getSqlType(colNameType).getJavaType(),
@@ -68,18 +71,31 @@ public class ORMGenerator {
 
                 CodeBlock.Builder codeBlock = CodeBlock.builder().add("setColumnNames(new String[]{");
                 CodeBlock.Builder codeBlock1 = CodeBlock.builder();
+                CodeBlock.Builder codeBlock2 = CodeBlock.builder();
                 StringBuilder columnsList = new StringBuilder();
                 int n = 0;
                 List<String> tableFields = getTablesFields(connection, table);
+                List<MethodSpec> setters = new ArrayList<>(tableFields.size());
                 for (String colNameType : tableFields) {
                     int pointIndex = getPointIndex(colNameType);
                     String colName = colNameType.substring(0, pointIndex);
                     codeBlock.add("$L\"$L\"", n > 0 ? ", " : "", colName);
                     codeBlock1.addStatement("this.$L = $L", colName, colName);
+                    codeBlock2.addStatement("$L.set$L(rs.get$L("+(n+1)+"))",table,DbObject.capitalizedString(colName),
+                            getSqlType(colNameType).getJavaType().getSimpleName()
+                                    .replace("Integer", "Int")
+                    );
                     if (n > 0) {
                         columnsList.append(", ");
                     }
                     columnsList.append(colName);
+                    setters.add(
+                            MethodSpec.methodBuilder("set"+DbObject.capitalizedString(colName))
+                                    .addModifiers(Modifier.PUBLIC)
+                                    .addParameter(getSqlType(colNameType).getJavaType(), colName)
+                                    .addStatement("//TODO")
+                                    .build()
+                    );
                     n++;
                 }
                 codeBlock.addStatement("})");
@@ -93,6 +109,7 @@ public class ORMGenerator {
 
                 MethodSpec constructor2 = MethodSpec.constructorBuilder()
                         .addModifiers(Modifier.PUBLIC)
+                        .addParameter(Connection.class, "connection")
                         .addParameters(getFieldsParameters(tableFields))
                         .addStatement("super(connection, \"$L\", \"$L\")", table, getPrimaryKeyColumnName(table))
                         .addStatement("setNew($L.intValue() <= 0)", getPrimaryKeyColumnName(table))
@@ -115,10 +132,7 @@ public class ORMGenerator {
                         .addStatement("rs = ps.executeQuery()")
                         .beginControlFlow("if (rs.next())")
                         .addStatement("$L = new $L(getConnection())", table, DbObject.capitalizedString(table))
-                        .addStatement("//TODO:")
-                        .addStatement("//$L.setXbankbalanceId(new Integer(rs.getInt(1)))", table)
-                        .addStatement("//$L.setBalancedate(rs.getTimestamp(2))", table)
-                        .addStatement("//$L.setTotalvalue(rs.getDouble(3))", table)
+                        .addCode(codeBlock2.build())
                         .addStatement("$L.setNew(false)", table)
                         .endControlFlow()
                         .nextControlFlow("finally")
@@ -132,6 +146,23 @@ public class ORMGenerator {
                         .endControlFlow()
                         .endControlFlow()
                         .endControlFlow()
+                        .addStatement("return $L", table)
+                        .build();
+
+                MethodSpec insert = MethodSpec.methodBuilder("insert")
+                        .addModifiers(Modifier.PROTECTED)
+                        .addException(SQLException.class)
+                        .addException(ForeignKeyViolationException.class)
+                        .beginControlFlow("if(getTriggers() != null)")
+                        .addStatement("getTriggers().beforeInsert(this)")
+                        .endControlFlow()
+                        .addCode("//TODO\n")
+                        .build();
+
+                MethodSpec getTriggers = MethodSpec.methodBuilder("getTriggers")
+                        .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                        .returns(AbstractTriggers.class)
+                        .addStatement("return activeTriggers")
                         .build();
 
                 TypeSpec tableORM = TypeSpec.classBuilder(DbObject.capitalizedString(table))
@@ -140,7 +171,10 @@ public class ORMGenerator {
                         .addFields(genFields(table))
                         .addMethod(constructor)
                         .addMethod(constructor2)
+                        .addMethod(getTriggers)
                         .addMethod(loadOnId)
+                        .addMethod(insert)
+                        .addMethods(setters)
                         .build();
 
                 JavaFile javaFile = JavaFile.builder("org.dbdesktop.orm", tableORM)

@@ -14,7 +14,7 @@ import static java.lang.Integer.parseInt;
 @SuppressWarnings("MagicConstant")
 public abstract class DbObject implements Serializable {
 
-    private transient Connection connection = null;
+    protected transient Connection connection = null;
     private String tableName = null;
     private String idColumnName = null;
     private String[] columnNames = null;
