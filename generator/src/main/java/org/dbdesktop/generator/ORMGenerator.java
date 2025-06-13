@@ -2,10 +2,10 @@ package org.dbdesktop.generator;
 
 import com.squareup.javapoet.*;
 import org.dbdesktop.dbstructure.AbstractSqlType;
+import org.dbdesktop.dbstructure.MySqlType;
 import org.dbdesktop.orm.AbstractTriggers;
 import org.dbdesktop.orm.DbObject;
 import org.dbdesktop.orm.ForeignKeyViolationException;
-import org.dbdesktop.orm.TriggersAdapter;
 
 import javax.lang.model.element.Modifier;
 import java.io.File;
@@ -18,6 +18,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ORMGenerator {
     private static HashMap<String, String> tablesPksMap = new HashMap<>();
@@ -31,12 +32,12 @@ public class ORMGenerator {
 
     private List<FieldSpec> genFields(String tableName) throws Exception {
         List<FieldSpec> fields = new ArrayList<>();
-        fields.add(FieldSpec.builder(AbstractTriggers.class,"activeTriggers").addModifiers(Modifier.PROTECTED, Modifier.STATIC).build());
+        fields.add(FieldSpec.builder(AbstractTriggers.class, "activeTriggers").addModifiers(Modifier.PROTECTED, Modifier.STATIC).build());
         for (String colNameType : getTablesFields(connection, tableName)) {
             int pointIndex = getPointIndex(colNameType);
             fields.add(FieldSpec.builder(getSqlType(colNameType).getJavaType(),
                             colNameType.substring(0, pointIndex))
-                    .addModifiers(Modifier.PRIVATE, Modifier.FINAL)
+                    .addModifiers(Modifier.PRIVATE)
                     .build());
         }
         return fields;
@@ -63,47 +64,78 @@ public class ORMGenerator {
         return columnNames;
     }
 
-
     public void generateORMclasses(File outFolder) throws Exception {
         try {
             for (String table : getTables(connection, "vinyl")) {
                 System.out.println("Processing table: " + table);
 
+                String pkColName = getPrimaryKeyColumnName(table);
+                CodeBlock.Builder lastIdCodeBlock = CodeBlock.builder();
+                if (this.sqlTypeClass.equals(MySqlType.class)) {
+                    lastIdCodeBlock.addStatement("stmt = \"SELECT last_insert_id()\"");
+                } else {
+                    lastIdCodeBlock.addStatement("stmt = \"SELECT max($L) FROM $L\"", pkColName, table);
+                }
                 CodeBlock.Builder codeBlock = CodeBlock.builder().add("setColumnNames(new String[]{");
                 CodeBlock.Builder codeBlock1 = CodeBlock.builder();
                 CodeBlock.Builder codeBlock2 = CodeBlock.builder();
+                CodeBlock.Builder codeBlock3 = CodeBlock.builder();
+                CodeBlock.Builder codeBlock4 = CodeBlock.builder();
+                CodeBlock.Builder codeBlock5 = CodeBlock.builder();
                 StringBuilder columnsList = new StringBuilder();
+                StringBuilder insertSQL = new StringBuilder("\"INSERT INTO " + table +
+                        " (\" + (get" + DbObject.capitalizedString(pkColName) + "().intValue()!=0?\"" + pkColName + ", \":\"\")+");
+                StringBuilder insertValues = new StringBuilder("values (\" + (get" + DbObject.capitalizedString(pkColName) + "().intValue()!=0?\"?, \":\"\")+");
                 int n = 0;
                 List<String> tableFields = getTablesFields(connection, table);
                 List<MethodSpec> setters = new ArrayList<>(tableFields.size());
+                List<MethodSpec> getters = new ArrayList<>(tableFields.size());
                 for (String colNameType : tableFields) {
                     int pointIndex = getPointIndex(colNameType);
                     String colName = colNameType.substring(0, pointIndex);
                     codeBlock.add("$L\"$L\"", n > 0 ? ", " : "", colName);
                     codeBlock1.addStatement("this.$L = $L", colName, colName);
-                    codeBlock2.addStatement("$L.set$L(rs.get$L("+(n+1)+"))",table,DbObject.capitalizedString(colName),
+                    codeBlock2.addStatement("$L.set$L(rs.get$L(" + (n + 1) + "))", table, DbObject.capitalizedString(colName),
                             getSqlType(colNameType).getJavaType().getSimpleName()
                                     .replace("Integer", "Int")
                     );
                     if (n > 0) {
                         columnsList.append(", ");
+                        insertSQL.append(n > 1 ? "," : "\"").append(colName);
+                        insertValues.append(n > 1 ? "," : "\"").append("?");
+                        codeBlock3.addStatement("ps.setObject(++n, get$L())", DbObject.capitalizedString(colName));
+                        codeBlock4.addStatement("ps.setObject($L, get$L())", ""+n, DbObject.capitalizedString(colName));
                     }
                     columnsList.append(colName);
-                    setters.add(
-                            MethodSpec.methodBuilder("set"+DbObject.capitalizedString(colName))
+                    MethodSpec.Builder setter = MethodSpec.methodBuilder("set" + DbObject.capitalizedString(colName))
+                            .addModifiers(Modifier.PUBLIC)
+//                            .addException(SQLException.class)
+                            .addException(ForeignKeyViolationException.class)
+                            .addParameter(getSqlType(colNameType).getJavaType(), colName)
+                            .addStatement("setWasChanged(this.$L != null && !this.$L.equals($L))", colName, colName, colName)
+                            .addStatement("this.$L = $L", colName, colName);
+                    if (colName.equals(pkColName)) {
+                        setter.addStatement("setNew($L.intValue() == 0)", pkColName);
+                    }
+                    codeBlock5.addStatement("columnValues[$L] = get$L()", n, DbObject.capitalizedString(colName));
+                    setters.add(setter.build());
+                    getters.add(
+                            MethodSpec.methodBuilder("get" + DbObject.capitalizedString(colName))
                                     .addModifiers(Modifier.PUBLIC)
-                                    .addParameter(getSqlType(colNameType).getJavaType(), colName)
-                                    .addStatement("//TODO")
+                                    .returns(getSqlType(colNameType).getJavaType())
+                                    .addStatement("return this.$L", colName)
                                     .build()
                     );
                     n++;
                 }
+                insertSQL.append(") ").append(insertValues.toString()).append(")\"");
                 codeBlock.addStatement("})");
+                codeBlock3.addStatement("ps.execute()");
 
                 MethodSpec constructor = MethodSpec.constructorBuilder()
                         .addModifiers(Modifier.PUBLIC)
                         .addParameter(Connection.class, "connection")
-                        .addStatement("super(connection, \"$L\", \"$L\")", table, getPrimaryKeyColumnName(table))
+                        .addStatement("super(connection, \"$L\", \"$L\")", table, pkColName)
                         .addCode(codeBlock.build())
                         .build();
 
@@ -111,8 +143,8 @@ public class ORMGenerator {
                         .addModifiers(Modifier.PUBLIC)
                         .addParameter(Connection.class, "connection")
                         .addParameters(getFieldsParameters(tableFields))
-                        .addStatement("super(connection, \"$L\", \"$L\")", table, getPrimaryKeyColumnName(table))
-                        .addStatement("setNew($L.intValue() <= 0)", getPrimaryKeyColumnName(table))
+                        .addStatement("super(connection, \"$L\", \"$L\")", table, pkColName)
+                        .addStatement("setNew($L.intValue() <= 0)", pkColName)
                         .addCode(codeBlock1.build())
                         .build();
 
@@ -126,7 +158,7 @@ public class ORMGenerator {
                         .addStatement("$T ps = null", PreparedStatement.class)
                         .addStatement("$T rs = null", ResultSet.class)
                         .addStatement("$T stmt = \"SELECT $L FROM $L WHERE $L = \" + id", String.class,
-                                columnsList.toString(), table, getPrimaryKeyColumnName(table))
+                                columnsList.toString(), table, pkColName)
                         .beginControlFlow("try")
                         .addStatement("ps = getConnection().prepareStatement(stmt)")
                         .addStatement("rs = ps.executeQuery()")
@@ -156,13 +188,136 @@ public class ORMGenerator {
                         .beginControlFlow("if(getTriggers() != null)")
                         .addStatement("getTriggers().beforeInsert(this)")
                         .endControlFlow()
-                        .addCode("//TODO\n")
+                        .addStatement("PreparedStatement ps = null")
+                        .addStatement("String stmt = $L", insertSQL.toString())
+                        .beginControlFlow("try")
+                        .addStatement("ps = getConnection().prepareStatement(stmt)")
+                        .addStatement("int n = 0")
+                        .beginControlFlow("if(get$L().intValue() != 0)", DbObject.capitalizedString(pkColName))
+                        .addStatement("ps.setObject(++n, get$L())", DbObject.capitalizedString(pkColName))
+                        .endControlFlow()
+                        .addCode(codeBlock3.build())
+                        .nextControlFlow("finally")
+                        .addStatement("if (ps != null) ps.close()")
+                        .endControlFlow()
+                        .addStatement("ResultSet rs = null")
+                        .beginControlFlow("if(get$L().intValue() == 0)", DbObject.capitalizedString(pkColName))
+                        .addCode(lastIdCodeBlock.build())
+                        .beginControlFlow("try")
+                        .addStatement("ps = getConnection().prepareStatement(stmt)")
+                        .addStatement("rs = ps.executeQuery()")
+                        .beginControlFlow("if (rs.next())")
+                        .addStatement("setId(new Integer(rs.getInt(1)))")
+                        .endControlFlow()
+                        .nextControlFlow("finally")
+                        .beginControlFlow("try")
+                        .addStatement("if (rs != null) rs.close()")
+                        .nextControlFlow("finally")
+                        .addStatement("if (ps != null) ps.close()")
+                        .endControlFlow()
+                        .endControlFlow()
+                        .endControlFlow()
+                        .addStatement("setNew(false)")
+                        .addStatement("setWasChanged(false)")
+                        .beginControlFlow("if (getTriggers() != null)")
+                        .addStatement("getTriggers().afterInsert(this);")
+                        .endControlFlow()
+                        .build();
+
+                MethodSpec save = MethodSpec.methodBuilder("save")
+                        .addModifiers(Modifier.PUBLIC)
+                        .addException(SQLException.class)
+                        .addException(ForeignKeyViolationException.class)
+                        .beginControlFlow("if(isNew())")
+                        .addStatement("insert()")
+                        .nextControlFlow("else")
+                        .beginControlFlow("if (getTriggers() != null)")
+                        .addStatement("getTriggers().beforeUpdate(this)")
+                        .endControlFlow()
+                        .addStatement("PreparedStatement ps = null")
+                        .addStatement("String stmt = \"UPDATE $L SET $L WHERE $L = \" + get$L()",
+                                table,
+                                tableFields.stream().map(s -> s.substring(0, s.indexOf('.'))).filter(s -> !s.equals(pkColName))
+                                        .collect(Collectors.joining(" = ?, ", "", " = ?")),
+                                pkColName, DbObject.capitalizedString(pkColName))
+                        .beginControlFlow("try")
+                        .addStatement("ps = getConnection().prepareStatement(stmt)")
+                        .addCode(codeBlock4.build())
+                        .addStatement("ps.execute()")
+                        .nextControlFlow("finally")
+                        .addStatement("if (ps != null) ps.close()")
+                        .endControlFlow()
+                        .addStatement("setWasChanged(false)")
+                        .beginControlFlow("if (getTriggers() != null)")
+                        .addStatement("getTriggers().afterUpdate(this)")
+                        .endControlFlow()
+                        .endControlFlow()
+                        .build();
+
+                MethodSpec delete = MethodSpec.methodBuilder("delete")
+                        .addModifiers(Modifier.PUBLIC)
+                        .addException(SQLException.class)
+                        .addException(ForeignKeyViolationException.class)
+                        .beginControlFlow("if (getTriggers() != null)")
+                        .addStatement("getTriggers().beforeDelete(this)")
+                        .endControlFlow()
+                        .addStatement("PreparedStatement ps = null")
+                        .addStatement("String stmt = \"DELETE FROM $L WHERE $L = \" + get$L()",
+                                table, pkColName, DbObject.capitalizedString(pkColName))
+                        .beginControlFlow("try")
+                        .addStatement("ps = getConnection().prepareStatement(stmt)")
+                        .addStatement("ps.execute()")
+                        .nextControlFlow("finally")
+                        .addStatement("if (ps != null) ps.close()")
+                        .endControlFlow()
+                        .addStatement("set$L(new Integer(-get$L().intValue()))",DbObject.capitalizedString(pkColName),DbObject.capitalizedString(pkColName))
+                        .beginControlFlow("if (getTriggers() != null)")
+                        .addStatement("getTriggers().afterDelete(this)")
+                        .endControlFlow()
+                        .build();
+
+                MethodSpec isDeleted = MethodSpec.methodBuilder("isDeleted")
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(TypeName.BOOLEAN)
+                        .addStatement("return (get$L().intValue() < 0)", DbObject.capitalizedString(pkColName))
+                        .build();
+
+                MethodSpec getPK_ID = MethodSpec.methodBuilder("getPK_ID")
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(Integer.class)
+                        .addStatement("return $L", pkColName)
+                        .build();
+
+                MethodSpec setPK_ID = MethodSpec.methodBuilder("setPK_ID")
+                        .addModifiers(Modifier.PUBLIC)
+                        .addException(ForeignKeyViolationException.class)
+                        .addParameter(Integer.class, pkColName)
+                        .addStatement("boolean prevIsNew = isNew()")
+                        .addStatement("set$L($L)", DbObject.capitalizedString(pkColName), pkColName)
+                        .addStatement("setNew(prevIsNew)")
                         .build();
 
                 MethodSpec getTriggers = MethodSpec.methodBuilder("getTriggers")
                         .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
                         .returns(AbstractTriggers.class)
                         .addStatement("return activeTriggers")
+                        .build();
+
+                MethodSpec getAsRow = MethodSpec.methodBuilder("getAsRow")
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(ArrayTypeName.of(ClassName.get(Object.class)))
+                        .addStatement("Object[] columnValues = new Object[$L]", tableFields.size())
+                        .addCode(codeBlock5.build())
+                        .addStatement("return columnValues")
+                        .build();
+
+                MethodSpec fillFromString = MethodSpec.methodBuilder("fillFromString")
+                        .addModifiers(Modifier.PUBLIC)
+                        .addException(SQLException.class)
+                        .addException(ForeignKeyViolationException.class)
+                        .addParameter(String.class, "row")
+                        .addStatement("String[] flds = splitStr(row, delimiter)")
+                        .addCode("//TODO:....\n")
                         .build();
 
                 TypeSpec tableORM = TypeSpec.classBuilder(DbObject.capitalizedString(table))
@@ -174,7 +329,15 @@ public class ORMGenerator {
                         .addMethod(getTriggers)
                         .addMethod(loadOnId)
                         .addMethod(insert)
+                        .addMethod(save)
+                        .addMethod(delete)
+                        .addMethod(isDeleted)
+                        .addMethod(getPK_ID)
+                        .addMethod(setPK_ID)
                         .addMethods(setters)
+                        .addMethods(getters)
+                        .addMethod(getAsRow)
+                        .addMethod(fillFromString)
                         .build();
 
                 JavaFile javaFile = JavaFile.builder("org.dbdesktop.orm", tableORM)
