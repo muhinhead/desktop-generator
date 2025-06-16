@@ -11,10 +11,7 @@ import javax.lang.model.element.Modifier;
 import java.io.File;
 import java.lang.reflect.Constructor;
 import java.nio.file.Paths;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -104,12 +101,11 @@ public class ORMGenerator {
                         insertSQL.append(n > 1 ? "," : "\"").append(colName);
                         insertValues.append(n > 1 ? "," : "\"").append("?");
                         codeBlock3.addStatement("ps.setObject(++n, get$L())", DbObject.capitalizedString(colName));
-                        codeBlock4.addStatement("ps.setObject($L, get$L())", ""+n, DbObject.capitalizedString(colName));
+                        codeBlock4.addStatement("ps.setObject($L, get$L())", "" + n, DbObject.capitalizedString(colName));
                     }
                     columnsList.append(colName);
                     MethodSpec.Builder setter = MethodSpec.methodBuilder("set" + DbObject.capitalizedString(colName))
                             .addModifiers(Modifier.PUBLIC)
-//                            .addException(SQLException.class)
                             .addException(ForeignKeyViolationException.class)
                             .addParameter(getSqlType(colNameType).getJavaType(), colName)
                             .addStatement("setWasChanged(this.$L != null && !this.$L.equals($L))", colName, colName, colName)
@@ -150,6 +146,7 @@ public class ORMGenerator {
 
                 MethodSpec loadOnId = MethodSpec.methodBuilder("loadOnId")
                         .addModifiers(Modifier.PUBLIC)
+                        .addAnnotation(Override.class)
                         .returns(DbObject.class)
                         .addParameter(TypeName.INT, "id")
                         .addException(SQLException.class)
@@ -183,6 +180,7 @@ public class ORMGenerator {
 
                 MethodSpec insert = MethodSpec.methodBuilder("insert")
                         .addModifiers(Modifier.PROTECTED)
+                        .addAnnotation(Override.class)
                         .addException(SQLException.class)
                         .addException(ForeignKeyViolationException.class)
                         .beginControlFlow("if(getTriggers() != null)")
@@ -226,6 +224,7 @@ public class ORMGenerator {
 
                 MethodSpec save = MethodSpec.methodBuilder("save")
                         .addModifiers(Modifier.PUBLIC)
+                        .addAnnotation(Override.class)
                         .addException(SQLException.class)
                         .addException(ForeignKeyViolationException.class)
                         .beginControlFlow("if(isNew())")
@@ -256,6 +255,7 @@ public class ORMGenerator {
 
                 MethodSpec delete = MethodSpec.methodBuilder("delete")
                         .addModifiers(Modifier.PUBLIC)
+                        .addAnnotation(Override.class)
                         .addException(SQLException.class)
                         .addException(ForeignKeyViolationException.class)
                         .beginControlFlow("if (getTriggers() != null)")
@@ -270,7 +270,7 @@ public class ORMGenerator {
                         .nextControlFlow("finally")
                         .addStatement("if (ps != null) ps.close()")
                         .endControlFlow()
-                        .addStatement("set$L(new Integer(-get$L().intValue()))",DbObject.capitalizedString(pkColName),DbObject.capitalizedString(pkColName))
+                        .addStatement("set$L(new Integer(-get$L().intValue()))", DbObject.capitalizedString(pkColName), DbObject.capitalizedString(pkColName))
                         .beginControlFlow("if (getTriggers() != null)")
                         .addStatement("getTriggers().afterDelete(this)")
                         .endControlFlow()
@@ -278,18 +278,21 @@ public class ORMGenerator {
 
                 MethodSpec isDeleted = MethodSpec.methodBuilder("isDeleted")
                         .addModifiers(Modifier.PUBLIC)
+                        .addAnnotation(Override.class)
                         .returns(TypeName.BOOLEAN)
                         .addStatement("return (get$L().intValue() < 0)", DbObject.capitalizedString(pkColName))
                         .build();
 
                 MethodSpec getPK_ID = MethodSpec.methodBuilder("getPK_ID")
                         .addModifiers(Modifier.PUBLIC)
+                        .addAnnotation(Override.class)
                         .returns(Integer.class)
-                        .addStatement("return $L", pkColName)
+                        .addStatement("return this.$L", pkColName)
                         .build();
 
                 MethodSpec setPK_ID = MethodSpec.methodBuilder("setPK_ID")
                         .addModifiers(Modifier.PUBLIC)
+                        .addAnnotation(Override.class)
                         .addException(ForeignKeyViolationException.class)
                         .addParameter(Integer.class, pkColName)
                         .addStatement("boolean prevIsNew = isNew()")
@@ -305,6 +308,7 @@ public class ORMGenerator {
 
                 MethodSpec getAsRow = MethodSpec.methodBuilder("getAsRow")
                         .addModifiers(Modifier.PUBLIC)
+                        .addAnnotation(Override.class)
                         .returns(ArrayTypeName.of(ClassName.get(Object.class)))
                         .addStatement("Object[] columnValues = new Object[$L]", tableFields.size())
                         .addCode(codeBlock5.build())
@@ -313,11 +317,12 @@ public class ORMGenerator {
 
                 MethodSpec fillFromString = MethodSpec.methodBuilder("fillFromString")
                         .addModifiers(Modifier.PUBLIC)
+                        .addAnnotation(Override.class)
                         .addException(SQLException.class)
                         .addException(ForeignKeyViolationException.class)
                         .addParameter(String.class, "row")
                         .addStatement("String[] flds = splitStr(row, delimiter)")
-                        .addCode("//TODO:....\n")
+                        .addCode(getFillFromStringFieldsCode(tableFields))
                         .build();
 
                 TypeSpec tableORM = TypeSpec.classBuilder(DbObject.capitalizedString(table))
@@ -350,9 +355,46 @@ public class ORMGenerator {
         }
     }
 
+    private CodeBlock getFillFromStringFieldsCode(List<String> tableFields) throws Exception {
+        CodeBlock.Builder cb = CodeBlock.builder();
+        int n = 0;
+        for (String colNameType : tableFields) {
+            int pointIndex = getPointIndex(colNameType);
+            String colName = colNameType.substring(0, pointIndex);
+            Class colJavaType = getSqlType(colNameType).getJavaType();
+            if (colJavaType.equals(String.class)) {
+                cb.addStatement("set$L(flds[$L])", DbObject.capitalizedString(colName), n);
+            } else if (colJavaType.equals(Timestamp.class)) {
+                cb.addStatement("set$L(toTimeStamp(flds[$L]))", DbObject.capitalizedString(colName), n);
+            } else if (colJavaType.equals(Date.class)) {
+                cb.addStatement("set$L(toDate(flds[$L]))", DbObject.capitalizedString(colName), n);
+            } else if (colJavaType.equals(Integer.class)) {
+                cb.beginControlFlow("try");
+                cb.addStatement("set$L(Integer.parseInt(flds[$L]))", DbObject.capitalizedString(colName), n);
+                cb.nextControlFlow("catch(NumberFormatException ne)");
+                cb.addStatement("set$L(null)", DbObject.capitalizedString(colName));
+                cb.endControlFlow();
+            } else if (colJavaType.equals(Double.class)) {
+                cb.beginControlFlow("try");
+                cb.addStatement("set$L(Double.parseDouble(flds[$L]))", DbObject.capitalizedString(colName), n);
+                cb.nextControlFlow("catch(NumberFormatException ne)");
+                cb.addStatement("set$L(null)", DbObject.capitalizedString(colName));
+                cb.endControlFlow();
+            } else if (colJavaType.equals(Float.class)) {
+                cb.beginControlFlow("try");
+                cb.addStatement("set$L(Float.parseFloat(flds[$L]))", DbObject.capitalizedString(colName), n);
+                cb.nextControlFlow("catch(NumberFormatException ne)");
+                cb.addStatement("set$L(null)", DbObject.capitalizedString(colName));
+                cb.endControlFlow();
+            }
+            n++;
+        }
+        return cb.build();
+    }
+
     private static int getPointIndex(String colNameType) throws Exception {
         int pointIndex = colNameType.indexOf('.');
-        if (pointIndex < 2) {
+        if (pointIndex < 1) {
             throw new Exception("Column definition [" + colNameType
                     + "] does not contain a point delimiter. Check your getTablesFields() method!");
         }

@@ -44,6 +44,8 @@ public class MySqlType extends AbstractSqlType {
         sql2java.put("varchar", String.class);
         sql2java.put("varchar2", String.class);
         sql2java.put("longvarchar", String.class);
+        sql2java.put("mediumtext", String.class);
+        sql2java.put("text", String.class);
         sql2java.put("varchar_ignorecase", String.class);
         sql2java.put("text", String.class);
         sql2java.put("char", String.class);
