@@ -20,11 +20,13 @@ import java.util.stream.Collectors;
 public class ORMGenerator {
     private static HashMap<String, String> tablesPksMap = new HashMap<>();
     private final Class<? extends AbstractSqlType> sqlTypeClass;
+    private final String database;
     public Connection connection;
 
-    public ORMGenerator(Connection connection, Class<? extends AbstractSqlType> sqlTypeClass) {
+    public ORMGenerator(Connection connection, String database, Class<? extends AbstractSqlType> sqlTypeClass) {
         this.sqlTypeClass = sqlTypeClass;
         this.connection = connection;
+        this.database = database;
     }
 
     private List<FieldSpec> genFields(String tableName) throws Exception {
@@ -49,9 +51,10 @@ public class ORMGenerator {
 
     private List<String> getTablesFields(Connection connection, String tableName) throws SQLException {
         List<String> columnNames = new ArrayList<>();
-        String sql = "SELECT concat(column_name,'.',data_type) col FROM information_schema.columns WHERE table_name = ? ORDER BY ORDINAL_POSITION";
+        String sql = "SELECT concat(column_name,'.',data_type) col FROM information_schema.columns WHERE table_name = ? AND table_schema = ? ORDER BY ORDINAL_POSITION";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, tableName);
+            stmt.setString(2, this.database);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     columnNames.add(rs.getString("col"));
@@ -63,7 +66,7 @@ public class ORMGenerator {
 
     public void generateORMclasses(File outFolder) throws Exception {
         try {
-            for (String table : getTables(connection, "vinyl")) {
+            for (String table : getTables(connection, this.database)) {
                 System.out.println("Processing table: " + table);
 
                 String pkColName = getPrimaryKeyColumnName(table);
@@ -205,7 +208,7 @@ public class ORMGenerator {
                         .addStatement("ps = getConnection().prepareStatement(stmt)")
                         .addStatement("rs = ps.executeQuery()")
                         .beginControlFlow("if (rs.next())")
-                        .addStatement("setId(new Integer(rs.getInt(1)))")
+                        .addStatement("set$L(new Integer(rs.getInt(1)))", DbObject.capitalizedString(getPrimaryKeyColumnName(table)))
                         .endControlFlow()
                         .nextControlFlow("finally")
                         .beginControlFlow("try")
@@ -414,10 +417,11 @@ public class ORMGenerator {
     private String getPrimaryKeyColumnName(String table) throws SQLException {
         String pkColumnName = tablesPksMap.get(table);
         if (pkColumnName == null) {
-            String sql = "SELECT column_name FROM information_schema.KEY_COLUMN_USAGE WHERE table_name = ? " +
+            String sql = "SELECT column_name FROM information_schema.KEY_COLUMN_USAGE WHERE table_name = ? AND table_schema= ? " +
                     "AND CONSTRAINT_NAME = 'PRIMARY'";
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setString(1, table);
+                stmt.setString(2, this.database);
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
                         pkColumnName = rs.getString("column_name");
@@ -431,7 +435,7 @@ public class ORMGenerator {
 
     public static List<String> getTables(Connection connection, String dbName) throws SQLException {
         List<String> tableNames = new ArrayList<>();
-        String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ?";
+        String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE'";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, dbName);
             try (ResultSet rs = stmt.executeQuery()) {
