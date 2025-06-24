@@ -49,7 +49,7 @@ public class Main {
 
         try (Connection conn = DriverManager.getConnection(url, username, password)) {
             System.out.println("✅ Successfully connected to the database.");
-            new ORMGenerator(conn, database, MySqlType.class).generateORMclasses(new File("./target/generated-sources"));
+            new ORMGenerator(conn, database, MySqlType.class).generateORMclasses("./generator/target/generated-sources");
         } catch (Exception e) {
             System.err.println("❌ Connection failed: " + e.getMessage());
         }
