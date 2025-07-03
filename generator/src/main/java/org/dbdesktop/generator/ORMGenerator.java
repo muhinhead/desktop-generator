@@ -8,7 +8,6 @@ import org.dbdesktop.orm.DbObject;
 import org.dbdesktop.orm.ForeignKeyViolationException;
 
 import javax.lang.model.element.Modifier;
-import java.io.File;
 import java.lang.reflect.Constructor;
 import java.nio.file.Paths;
 import java.sql.*;
@@ -81,7 +80,6 @@ public class ORMGenerator {
         try {
             for (String table : getTables(connection, this.database)) {
                 System.out.println("Processing table: " + table);
-
                 String pkColName = getPrimaryKeyColumnName(table);
                 CodeBlock.Builder lastIdCodeBlock = CodeBlock.builder();
                 if (this.sqlTypeClass.equals(MySqlType.class)) {
@@ -168,26 +166,14 @@ public class ORMGenerator {
                         .addException(SQLException.class)
                         .addException(ForeignKeyViolationException.class)
                         .addStatement("$L $L = null", DbObject.capitalizedString(table), table)
-                        .addStatement("$T ps = null", PreparedStatement.class)
-                        .addStatement("$T rs = null", ResultSet.class)
                         .addStatement("$T stmt = \"SELECT $L FROM $L WHERE $L = \" + id", String.class,
                                 columnsList.toString(), table, pkColName)
-                        .beginControlFlow("try")
-                        .addStatement("ps = getConnection().prepareStatement(stmt)")
-                        .addStatement("rs = ps.executeQuery()")
+                        .beginControlFlow("try ($T ps = getConnection().prepareStatement(stmt)) {", PreparedStatement.class)
+                        .beginControlFlow("try ($T rs = ps.executeQuery()) {", ResultSet.class)
                         .beginControlFlow("if (rs.next())")
                         .addStatement("$L = new $L(getConnection())", table, DbObject.capitalizedString(table))
                         .addCode(codeBlock2.build())
                         .addStatement("$L.setNew(false)", table)
-                        .endControlFlow()
-                        .nextControlFlow("finally")
-                        .beginControlFlow("try")
-                        .beginControlFlow("if (rs != null)")
-                        .addStatement("rs.close()")
-                        .endControlFlow()
-                        .nextControlFlow("finally")
-                        .beginControlFlow("if (ps != null)")
-                        .addStatement("ps.close()")
                         .endControlFlow()
                         .endControlFlow()
                         .endControlFlow()
@@ -202,33 +188,19 @@ public class ORMGenerator {
                         .beginControlFlow("if(getTriggers() != null)")
                         .addStatement("getTriggers().beforeInsert(this)")
                         .endControlFlow()
-//                        .addStatement("PreparedStatement ps = null")
                         .addStatement("String stmt = $L", insertSQL.toString())
                         .beginControlFlow("try (PreparedStatement ps = getConnection().prepareStatement(stmt))")
-//                        .addStatement("ps = getConnection().prepareStatement(stmt)")
                         .addStatement("int n = 0")
                         .beginControlFlow("if(get$L().intValue() != 0)", DbObject.capitalizedString(pkColName))
                         .addStatement("ps.setObject(++n, get$L())", DbObject.capitalizedString(pkColName))
                         .endControlFlow()
                         .addCode(codeBlock3.build())
-//                        .nextControlFlow("finally")
-//                        .addStatement("if (ps != null) ps.close()")
                         .endControlFlow()
-                        .addStatement("PreparedStatement ps = null")
-                        .addStatement("ResultSet rs = null")
-                        .beginControlFlow("if(get$L().intValue() == 0)", DbObject.capitalizedString(pkColName))
                         .addCode(lastIdCodeBlock.build())
-                        .beginControlFlow("try")
-                        .addStatement("ps = getConnection().prepareStatement(stmt)")
-                        .addStatement("rs = ps.executeQuery()")
+                        .beginControlFlow("try (PreparedStatement ps = getConnection().prepareStatement(stmt))")
+                        .beginControlFlow("try (ResultSet rs = ps.executeQuery())")
                         .beginControlFlow("if (rs.next())")
                         .addStatement("set$L(rs.getInt(1))", DbObject.capitalizedString(getPrimaryKeyColumnName(table)))
-                        .endControlFlow()
-                        .nextControlFlow("finally")
-                        .beginControlFlow("try")
-                        .addStatement("if (rs != null) rs.close()")
-                        .nextControlFlow("finally")
-                        .addStatement("if (ps != null) ps.close()")
                         .endControlFlow()
                         .endControlFlow()
                         .endControlFlow()
@@ -250,18 +222,14 @@ public class ORMGenerator {
                         .beginControlFlow("if (getTriggers() != null)")
                         .addStatement("getTriggers().beforeUpdate(this)")
                         .endControlFlow()
-//                        .addStatement("PreparedStatement ps = null")
                         .addStatement("String stmt = \"UPDATE $L SET $L WHERE $L = \" + get$L()",
                                 table,
                                 tableFields.stream().map(s -> s.substring(0, s.indexOf('.'))).filter(s -> !s.equals(pkColName))
                                         .collect(Collectors.joining(" = ?, ", "", " = ?")),
                                 pkColName, DbObject.capitalizedString(pkColName))
                         .beginControlFlow("try (PreparedStatement ps = getConnection().prepareStatement(stmt))")
-//                        .addStatement("ps = getConnection().prepareStatement(stmt)")
                         .addCode(codeBlock4.build())
                         .addStatement("ps.execute()")
-//                        .nextControlFlow("finally")
-//                        .addStatement("if (ps != null) ps.close()")
                         .endControlFlow()
                         .addStatement("setWasChanged(false)")
                         .beginControlFlow("if (getTriggers() != null)")
@@ -278,14 +246,10 @@ public class ORMGenerator {
                         .beginControlFlow("if (getTriggers() != null)")
                         .addStatement("getTriggers().beforeDelete(this)")
                         .endControlFlow()
-//                        .addStatement("PreparedStatement ps = null")
                         .addStatement("String stmt = \"DELETE FROM $L WHERE $L = \" + get$L()",
                                 table, pkColName, DbObject.capitalizedString(pkColName))
                         .beginControlFlow("try (PreparedStatement ps = getConnection().prepareStatement(stmt))")
-//                        .addStatement("ps = getConnection().prepareStatement(stmt)")
                         .addStatement("ps.execute()")
-//                        .nextControlFlow("finally")
-//                        .addStatement("if (ps != null) ps.close()")
                         .endControlFlow()
                         .addStatement("set$L(-get$L().intValue())", DbObject.capitalizedString(pkColName), DbObject.capitalizedString(pkColName))
                         .beginControlFlow("if (getTriggers() != null)")
