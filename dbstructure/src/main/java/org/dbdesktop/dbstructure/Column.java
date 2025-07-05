@@ -9,6 +9,16 @@ public class Column {
     private boolean isNullable = true;
     private boolean isPrimary = true;
 
+    public Column(int number, String name, AbstractSqlType type, Integer length, Integer precision, boolean isNullable, boolean isPrimary) {
+        this.number = number;
+        this.name = name;
+        this.type = type;
+        this.length = length;
+        this.precision = precision;
+        this.isNullable = isNullable;
+        this.isPrimary = isPrimary;
+    }
+
     public int getNumber() {
         return number;
     }

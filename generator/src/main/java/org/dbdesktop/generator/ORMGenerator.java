@@ -2,13 +2,17 @@ package org.dbdesktop.generator;
 
 import com.squareup.javapoet.*;
 import org.dbdesktop.dbstructure.AbstractSqlType;
+import org.dbdesktop.dbstructure.Column;
 import org.dbdesktop.dbstructure.MySqlType;
+import org.dbdesktop.dbstructure.Table;
 import org.dbdesktop.orm.AbstractTriggers;
 import org.dbdesktop.orm.DbObject;
 import org.dbdesktop.orm.ForeignKeyViolationException;
+import org.jetbrains.annotations.NotNull;
 
 import javax.lang.model.element.Modifier;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Paths;
 import java.sql.*;
 import java.util.ArrayList;
@@ -57,8 +61,41 @@ public class ORMGenerator {
     private AbstractSqlType getSqlType(String colNameType) throws Exception {
         int pointIndex = getPointIndex(colNameType);
         String sqlType = colNameType.substring(pointIndex + 1);
+        return getAbstractSqlType(sqlType);
+    }
+
+    private @NotNull AbstractSqlType getAbstractSqlType(String sqlType) throws NoSuchMethodException, InstantiationException, IllegalAccessException, InvocationTargetException {
         Constructor<? extends AbstractSqlType> constructor = sqlTypeClass.getConstructor(String.class);
         return constructor.newInstance(sqlType);
+    }
+
+    private List<Column> getTableColumns(String tableName) throws Exception {
+        List<Column> columnList = new ArrayList<>();
+        String sql = "SELECT cols.ordinal_position, cols.column_name, cols.data_type," +
+                "cols.character_maximum_length, cols.numeric_precision, cols.is_nullable," +
+                "CASE WHEN kcu.COLUMN_NAME IS NOT NULL THEN 'YES'" +
+                "                        ELSE 'NO'" +
+                "                    END AS IS_PRIMARY_KEY" +
+                "                FROM information_schema.columns cols " +
+                "                LEFT JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu " +
+                "                    ON cols.TABLE_SCHEMA = kcu.TABLE_SCHEMA " +
+                "                    AND cols.TABLE_NAME = kcu.TABLE_NAME " +
+                "                    AND cols.COLUMN_NAME = kcu.COLUMN_NAME " +
+                "                    AND kcu.CONSTRAINT_NAME = 'PRIMARY' " +
+                "WHERE cols.table_name = ? AND cols.table_schema = ? ORDER BY cols.ORDINAL_POSITION";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, tableName);
+            stmt.setString(2, this.database);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    columnList.add(new Column(rs.getInt(1),
+                            rs.getString(2), getAbstractSqlType(rs.getString(3)),
+                            rs.getInt(4), rs.getInt(5), rs.getString(6).equals("YES"),
+                            rs.getString(7).equals("YES")));
+                }
+            }
+        }
+        return columnList;
     }
 
     private List<String> getTablesFields(Connection connection, String tableName) throws SQLException {
@@ -78,7 +115,7 @@ public class ORMGenerator {
 
     public void generateORMclasses(String outFolder) throws Exception {
         try {
-            for (String table : getTables(connection, this.database)) {
+            for (String table : getTables()) {
                 System.out.println("Processing table: " + table);
                 String pkColName = getPrimaryKeyColumnName(table);
                 CodeBlock.Builder lastIdCodeBlock = CodeBlock.builder();
@@ -411,14 +448,18 @@ public class ORMGenerator {
         return pkColumnName;
     }
 
-    public static List<String> getTables(Connection connection, String dbName) throws SQLException {
+    public  List<String> getTables() throws Exception {
         List<String> tableNames = new ArrayList<>();
         String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE'";
         try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, dbName);
+            stmt.setString(1, this.database);
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    tableNames.add(rs.getString("table_name"));
+                    String tableName = rs.getString("table_name");
+                    tableNames.add(tableName);
+                    Table t = new Table(tableName);
+                    t.setColumns(getTableColumns(tableName));
+                    Table.allTables.put(tableName, t);
                 }
             }
         }
