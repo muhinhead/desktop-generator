@@ -18,6 +18,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 /* --- foreign keys info request ---
 SELECT  u.constraint_name,
@@ -448,21 +449,21 @@ public class ORMGenerator {
         return pkColumnName;
     }
 
-    public  List<String> getTables() throws Exception {
-        List<String> tableNames = new ArrayList<>();
-        String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE'";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-            stmt.setString(1, this.database);
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    String tableName = rs.getString("table_name");
-                    tableNames.add(tableName);
-                    Table t = new Table(tableName);
-                    t.setColumns(getTableColumns(tableName));
-                    Table.allTables.put(tableName, t);
+    public  Set<String> getTables() throws Exception {
+        if(Table.allTables.isEmpty()) {
+            String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE'";
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, this.database);
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        String tableName = rs.getString("table_name");
+                        Table t = new Table(tableName);
+                        t.setColumns(getTableColumns(tableName));
+                        Table.allTables.put(tableName, t);
+                    }
                 }
             }
         }
-        return tableNames;
+        return Table.allTables.keySet();
     }
 }
