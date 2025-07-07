@@ -1,10 +1,7 @@
 package org.dbdesktop.generator;
 
 import com.squareup.javapoet.*;
-import org.dbdesktop.dbstructure.AbstractSqlType;
-import org.dbdesktop.dbstructure.Column;
-import org.dbdesktop.dbstructure.MySqlType;
-import org.dbdesktop.dbstructure.Table;
+import org.dbdesktop.dbstructure.*;
 import org.dbdesktop.orm.AbstractTriggers;
 import org.dbdesktop.orm.DbObject;
 import org.dbdesktop.orm.ForeignKeyViolationException;
@@ -449,21 +446,68 @@ public class ORMGenerator {
         return pkColumnName;
     }
 
-    public  Set<String> getTables() throws Exception {
-        if(Table.allTables.isEmpty()) {
+    public Set<String> getTables() throws Exception {
+        if (Table.allTables.isEmpty()) {
             String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE'";
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setString(1, this.database);
                 try (ResultSet rs = stmt.executeQuery()) {
                     while (rs.next()) {
                         String tableName = rs.getString("table_name");
-                        Table t = new Table(tableName);
-                        t.setColumns(getTableColumns(tableName));
-                        Table.allTables.put(tableName, t);
+                        Table table = new Table(tableName);
+                        table.setColumns(getTableColumns(tableName));
+                        Table.allTables.put(tableName, table);
                     }
                 }
             }
+            for (Table table : Table.allTables.values()) {
+                table.setForeignKeys(getTableForeignKeys(table));
+            }
+//            Table.allTables.values().forEach(
+//                    table -> {
+//                        try {
+//                            table.setForeignKeys(getTableForeignKeys(table));
+//                        } catch (SQLException e) {
+//                            throw new RuntimeException(e);
+//                        }
+//                    }
+//            );
         }
         return Table.allTables.keySet();
+    }
+
+    private List<ForeignKey> getTableForeignKeys(Table table) throws SQLException {
+        List<ForeignKey> foreignKeys = new ArrayList<>();
+        String sql = "SELECT  u.constraint_name," +
+                "u.table_name," +
+                "u.column_name," +
+                "u.referenced_column_name," +
+                "rc.DELETE_RULE " +
+                " FROM    information_schema.key_column_usage u," +
+                "        information_schema.REFERENTIAL_CONSTRAINTS rc " +
+                " WHERE   u.constraint_name=rc.constraint_name" +
+                "    and u.table_schema = ?" +
+                "    and u.referenced_table_name = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, this.database);
+            stmt.setString(2, table.getName());
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    Table referencingTable = Table.allTables.get(rs.getString(2));
+                    foreignKeys.add(new ForeignKey(
+                            rs.getString(1),
+                            referencingTable.getColumnByName(rs.getString(3)),
+                            referencingTable,
+                            table,
+                            rs.getString(4).equals("CASCADE"),
+                            rs.getString(4).equals("SET NULL"))
+                    );
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                throw new RuntimeException(e);
+            }
+        }
+        return foreignKeys;
     }
 }
