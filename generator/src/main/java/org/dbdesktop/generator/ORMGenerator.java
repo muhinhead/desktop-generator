@@ -203,8 +203,8 @@ public class ORMGenerator {
                         .addStatement("$L $L = null", DbObject.capitalizedString(table), table)
                         .addStatement("$T stmt = \"SELECT $L FROM $L WHERE $L = \" + id", String.class,
                                 columnsList.toString(), table, pkColName)
-                        .beginControlFlow("try ($T ps = getConnection().prepareStatement(stmt)) {", PreparedStatement.class)
-                        .beginControlFlow("try ($T rs = ps.executeQuery()) {", ResultSet.class)
+                        .beginControlFlow("try ($T ps = getConnection().prepareStatement(stmt))", PreparedStatement.class)
+                        .beginControlFlow("try ($T rs = ps.executeQuery())", ResultSet.class)
                         .beginControlFlow("if (rs.next())")
                         .addStatement("$L = new $L(getConnection())", table, DbObject.capitalizedString(table))
                         .addCode(codeBlock2.build())
@@ -278,6 +278,7 @@ public class ORMGenerator {
                         .addAnnotation(Override.class)
                         .addException(SQLException.class)
                         .addException(ForeignKeyViolationException.class)
+                        .addCode(deleteCascadeCheckong(Table.allTables.get(table)))
                         .beginControlFlow("if (getTriggers() != null)")
                         .addStatement("getTriggers().beforeDelete(this)")
                         .endControlFlow()
@@ -345,6 +346,8 @@ public class ORMGenerator {
                         .addModifiers(Modifier.PUBLIC)
                         .superclass(DbObject.class)
                         .addFields(genFields(table))
+                        .addMethods(setters)
+                        .addMethods(getters)
                         .addMethod(constructor)
                         .addMethod(constructor2)
                         .addMethod(getTriggers)
@@ -355,8 +358,6 @@ public class ORMGenerator {
                         .addMethod(isDeleted)
                         .addMethod(getPK_ID)
                         .addMethod(setPK_ID)
-                        .addMethods(setters)
-                        .addMethods(getters)
                         .addMethod(getAsRow)
                         .addMethod(fillFromString)
                         .build();
@@ -369,6 +370,45 @@ public class ORMGenerator {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private CodeBlock deleteCascadeCheckong(Table table) {
+        CodeBlock.Builder cb = CodeBlock.builder();
+        for(ForeignKey fk : table.getForeignKeys()) {
+            String stmt = fk.getName().replace("_fk", "_SQL");
+            if(fk.isDeleteCascade()) {
+                cb.addStatement("String $L = \"delete from $L where $L=\" + this.$L",
+                        stmt,
+                        fk.getTableFrom().getName(),
+                        fk.getFkColumn().getName(),
+                        table.getPrimaryColumn().getName()
+                );
+                cb.beginControlFlow("try (PreparedStatement ps = getConnection().prepareStatement($L))",stmt);
+                cb.addStatement("ps.execute()");
+                cb.endControlFlow();
+            } else if(fk.isDeleteSetNull()) {
+                cb.addStatement("String $L = \"update $L set $L = NULL where $L = \" + this.$L",
+                        stmt,
+                        fk.getTableFrom().getName(),
+                        fk.getFkColumn().getName(),
+                        fk.getFkColumn().getName(),
+                        table.getPrimaryColumn().getName()
+                );
+                cb.beginControlFlow("try (PreparedStatement ps = getConnection().prepareStatement($L))",stmt);
+                cb.addStatement("ps.execute()");
+                cb.endControlFlow();
+            } else {
+                cb.beginControlFlow("if($L.exists(getConnection(),\"$L = \"+this. $L))",
+                        DbObject.capitalizedString(fk.getTableFrom().getName()),
+                        fk.getFkColumn().getName(),
+                        table.getPrimaryColumn().getName()
+                );
+                cb.addStatement("throw new ForeignKeyViolationException(\"Can't delete row in $L, foreign key $L constraint violation!\")",
+                        fk.getTableFrom().getName(), fk.getName());
+                cb.endControlFlow();
+            }
+        }
+        return cb.build();
     }
 
     private CodeBlock getFillFromStringFieldsCode(List<String> tableFields) throws Exception {
@@ -499,8 +539,8 @@ public class ORMGenerator {
                             referencingTable.getColumnByName(rs.getString(3)),
                             referencingTable,
                             table,
-                            rs.getString(4).equals("CASCADE"),
-                            rs.getString(4).equals("SET NULL"))
+                            rs.getString(5).equals("CASCADE"),
+                            rs.getString(5).equals("SET NULL"))
                     );
                 }
             } catch (Exception e) {
