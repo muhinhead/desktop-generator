@@ -2,7 +2,6 @@ package org.dbdesktop.generator;
 
 import org.dbdesktop.dbstructure.MySqlType;
 
-import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 
@@ -46,10 +45,11 @@ public class Main {
 
 
         String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC";
-
+        String outDir = "./generator/target/generated-sources";
         try (Connection conn = DriverManager.getConnection(url, username, password)) {
             System.out.println("✅ Successfully connected to the database.");
-            new ORMGenerator(conn, database, MySqlType.class).generateORMclasses("./generator/target/generated-sources");
+            new ORMGenerator(conn, database, "org.dbdesktop.orm", MySqlType.class).generateClasses(outDir);
+            new MySQLutilGenerator(host, Integer.parseInt(port), database, "org.dbdesktop.dbutil").generateClasses(outDir);
         } catch (Exception e) {
             System.err.println("❌ Connection failed: " + e.getMessage());
         }

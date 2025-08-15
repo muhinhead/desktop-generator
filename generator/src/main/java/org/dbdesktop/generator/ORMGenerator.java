@@ -17,30 +17,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-/* --- foreign keys info request ---
-SELECT  u.constraint_name,
-	u.table_name,
-	u.column_name,
-	u.referenced_table_name,
-	u.referenced_column_name,
-	rc.DELETE_RULE
-FROM    information_schema.key_column_usage u,
-        information_schema.REFERENTIAL_CONSTRAINTS rc
-WHERE   u.constraint_name=rc.constraint_name
-    and u.table_schema = 'xlend'
-    and u.referenced_table_name is not null;
- */
 
-public class ORMGenerator {
+public class ORMGenerator implements IClassesGenerator {
     private static HashMap<String, String> tablesPksMap = new HashMap<>();
     private final Class<? extends AbstractSqlType> sqlTypeClass;
     private final String database;
+    private final String packageName;
     public Connection connection;
 
-    public ORMGenerator(Connection connection, String database, Class<? extends AbstractSqlType> sqlTypeClass) {
+    public ORMGenerator(Connection connection, String database, String packageName, Class<? extends AbstractSqlType> sqlTypeClass) {
         this.sqlTypeClass = sqlTypeClass;
         this.connection = connection;
         this.database = database;
+        this.packageName = packageName;
     }
 
     private List<FieldSpec> genFields(String tableName) throws Exception {
@@ -111,7 +100,8 @@ public class ORMGenerator {
         return columnNames;
     }
 
-    public void generateORMclasses(String outFolder) throws Exception {
+    @Override
+    public void generateClasses(String outFolder) throws Exception {
         try {
             for (String table : getTables()) {
                 System.out.println("Processing table: " + table);
@@ -362,7 +352,7 @@ public class ORMGenerator {
                         .addMethod(fillFromString)
                         .build();
 
-                JavaFile javaFile = JavaFile.builder("org.dbdesktop.orm", tableORM)
+                JavaFile javaFile = JavaFile.builder(this.packageName, tableORM)
                         .build();
 
                 javaFile.writeTo(Paths.get(outFolder));
