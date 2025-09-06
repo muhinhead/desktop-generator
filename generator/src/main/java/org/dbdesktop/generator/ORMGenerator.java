@@ -59,7 +59,7 @@ public class ORMGenerator implements IClassesGenerator {
     private List<Column> getTableColumns(String tableName) throws Exception {
         List<Column> columnList = new ArrayList<>();
         String sql = "SELECT cols.ordinal_position, cols.column_name, cols.data_type," +
-                "cols.character_maximum_length, cols.numeric_precision, cols.is_nullable," +
+                "LEAST(cols.character_maximum_length,"+Integer.MAX_VALUE+"), cols.numeric_precision, cols.is_nullable," +
                 "CASE WHEN kcu.COLUMN_NAME IS NOT NULL THEN 'YES'" +
                 "                        ELSE 'NO'" +
                 "                    END AS IS_PRIMARY_KEY" +
@@ -80,6 +80,9 @@ public class ORMGenerator implements IClassesGenerator {
                             rs.getInt(4), rs.getInt(5), rs.getString(6).equals("YES"),
                             rs.getString(7).equals("YES")));
                 }
+            } catch (Exception e) {
+                System.out.println("Table:"+tableName);
+                throw new RuntimeException(e);
             }
         }
         return columnList;

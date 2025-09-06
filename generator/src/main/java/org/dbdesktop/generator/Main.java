@@ -49,9 +49,10 @@ public class Main {
         try (Connection conn = DriverManager.getConnection(url, username, password)) {
             System.out.println("✅ Successfully connected to the database.");
             new ORMGenerator(conn, database, "org.dbdesktop.orm", MySqlType.class).generateClasses(outDir);
-            new MySQLutilGenerator(host, Integer.parseInt(port), database, "org.dbdesktop.dbutil").generateClasses(outDir);
+            new SQLutilGenerator(host, Integer.parseInt(port), database, "org.dbdesktop.dbutil").generateClasses(outDir);
         } catch (Exception e) {
             System.err.println("❌ Connection failed: " + e.getMessage());
+            e.printStackTrace();
         }
 
     }

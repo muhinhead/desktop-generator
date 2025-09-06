@@ -60,6 +60,7 @@ public class MySqlType extends AbstractSqlType {
         sql2java.put("double", Double.class);
         sql2java.put("mediumblob", Object.class);
         sql2java.put("blob", Object.class);
+        sql2java.put("longblob", Object.class);
         sql2java.put("other", Object.class);
     }
 
