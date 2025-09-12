@@ -46,10 +46,11 @@ public class Main {
 
         String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC";
         String outDir = "./generator/target/generated-sources";
-        try (Connection conn = DriverManager.getConnection(url, username, password)) {
+        try (Connection connection = DriverManager.getConnection(url, username, password)) {
             System.out.println("✅ Successfully connected to the database.");
-            new ORMGenerator(conn, database, "org.dbdesktop.orm", MySqlType.class).generateClasses(outDir);
-            new SQLutilGenerator(host, Integer.parseInt(port), database, "org.dbdesktop.dbutil").generateClasses(outDir);
+            new ORMGenerator(connection, database, "org.dbdesktop.orm", MySqlType.class).generateClasses(outDir);
+            new SQLutilGenerator("org.dbdesktop.dbutil").generateClasses(outDir);
+            new AppGenerator(connection, password).generateClasses(outDir);
         } catch (Exception e) {
             System.err.println("❌ Connection failed: " + e.getMessage());
             e.printStackTrace();

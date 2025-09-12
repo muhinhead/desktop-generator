@@ -16,15 +16,15 @@ public class SQLutilGenerator implements IClassesGenerator {
 
     private static final String NOTSUPPORTED_MSG = "throw new $T(\"Not supported yet.\")";
     private static final String SERVER_VERSION = "0.1";
-    private final String host;
-    private final Integer port;
-    private final String database;
+//    private final String host;
+//    private final Integer port;
+//    private final String database;
     private final String packageName;
 
-    public SQLutilGenerator(String host, Integer port, String database, String packageName) {
-        this.host = host;
-        this.port = port;
-        this.database = database;
+    public SQLutilGenerator(String packageName) {
+//        this.host = host;
+//        this.port = port;
+//        this.database = database;
         this.packageName = packageName;
     }
 
