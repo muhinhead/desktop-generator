@@ -6,6 +6,7 @@ import javax.lang.model.element.Modifier;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.DriverManager;
 
 public class AppGenerator implements IClassesGenerator {
 
@@ -18,18 +19,17 @@ public class AppGenerator implements IClassesGenerator {
         this.password = password;
     }
 
-
-
     @Override
     public void generateClasses(String outFolder) throws Exception {
         DatabaseMetaData meta = this.connection.getMetaData();
 
         String dbName = extractDatabaseName(meta.getURL());
+        String user = meta.getUserName().replaceAll("@.*", "");
         System.out.println("URL: " + meta.getURL());
-        System.out.println("User: " + meta.getUserName().replaceAll("@.*", ""));
+        System.out.println("User: " + user);
         System.out.println("Password: " + this.password);
-        System.out.println("Database: " + meta.getDatabaseProductName());
-        System.out.println("Version: " + dbName);
+        System.out.println("Database: " + dbName);
+        System.out.println("Version: " + meta.getDatabaseProductName());
         System.out.println("Driver: " + meta.getDriverName());
 
         this.packageName = "org.dbdesktop.app." + dbName;
@@ -37,6 +37,13 @@ public class AppGenerator implements IClassesGenerator {
         MethodSpec mainMethod = MethodSpec.methodBuilder("main")
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
                 .addParameter(String[].class, "args")
+                .beginControlFlow("try ($T connection = $T.getConnection(\"$L\", \"$L\", \"$L\"))",
+                        Connection.class, DriverManager.class, meta.getURL(), user, this.password)
+                .addStatement("System.out.println(\"✅ Successfully connected to the database [$L].\")", dbName)
+                .nextControlFlow("catch ($T e)", Exception.class)
+                .addStatement("System.err.println(\"❌ Connection failed: \" + e.getMessage())")
+                .addStatement("e.printStackTrace()")
+                .endControlFlow()
                 .build();
 
         TypeSpec mainAppClass = TypeSpec.classBuilder(dbName.substring(0, 1).toUpperCase() + dbName.substring(1))
@@ -63,10 +70,6 @@ public class AppGenerator implements IClassesGenerator {
 
         // Cut at "?" if parameters exist
         int question = afterSlash.indexOf('?');
-        if (question >= 0) {
-            return afterSlash.substring(0, question);
-        } else {
-            return afterSlash;
-        }
+        return question > 0 ? afterSlash.substring(0, question) : afterSlash;
     }
 }
