@@ -25,20 +25,20 @@ public class SQLutilGenerator implements IClassesGenerator {
     @Override
     public void generateClasses(String outFolder) throws Exception {
 
-        generateIMessageSender(outFolder);
+//        generateIMessageSender(outFolder);
         generateDbClientSender(outFolder);
     }
 
-    private void generateIMessageSender(String outFolder) throws IOException {
-        TypeSpec iMessageSender = TypeSpec.interfaceBuilder("IMessageSender")
-                .addModifiers(Modifier.PUBLIC)
-                .addSuperinterface(java.rmi.Remote.class)
-                .addMethods(iMessageSenderMethods())
-                .build();
-        JavaFile javaFile = JavaFile.builder(this.packageName, iMessageSender)
-                .build();
-        javaFile.writeTo(Paths.get(outFolder));
-    }
+//    private void generateIMessageSender(String outFolder) throws IOException {
+//        TypeSpec iMessageSender = TypeSpec.interfaceBuilder("IMessageSender")
+//                .addModifiers(Modifier.PUBLIC)
+//                .addSuperinterface(java.rmi.Remote.class)
+//                .addMethods(iMessageSenderMethods())
+//                .build();
+//        JavaFile javaFile = JavaFile.builder(this.packageName, iMessageSender)
+//                .build();
+//        javaFile.writeTo(Paths.get(outFolder));
+//    }
 
     private void generateDbClientSender(String outFolder) throws IOException {
         ClassName connection = ClassName.get(Connection.class);
