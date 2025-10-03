@@ -2,6 +2,7 @@ package org.dbdesktop.generator;
 
 import com.squareup.javapoet.*;
 import org.dbdesktop.orm.DbObject;
+import org.dbdesktop.orm.IMessageSender;
 
 import javax.lang.model.element.Modifier;
 import java.io.IOException;
@@ -365,7 +366,7 @@ public class SQLutilGenerator implements IClassesGenerator {
 
         TypeSpec dbClientDataSender = TypeSpec.classBuilder("DbClientDataSender")
                 .addModifiers(Modifier.PUBLIC)
-                .addSuperinterface(ClassName.get(this.packageName, "IMessageSender"))
+                .addSuperinterface(IMessageSender.class)//ClassName.get(this.packageName, "IMessageSender"))
                 .addJavadoc("Generated with JavaPoet\n")
                 .addField(connectionField)
                 .addMethod(ctor)
