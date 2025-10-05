@@ -5,6 +5,8 @@ import org.dbdesktop.dbstructure.DbClientDataSender;
 import org.dbdesktop.guiutil.GeneralFrame;
 import org.dbdesktop.guiutil.GeneralGridPanel;
 import org.dbdesktop.guiutil.MyJideTabbedPane;
+import org.dbdesktop.guiutil.PropLogEngine;
+import org.dbdesktop.orm.ExchangeFactory;
 import org.dbdesktop.orm.IMessageSender;
 
 import javax.lang.model.element.Modifier;
@@ -15,6 +17,7 @@ import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.util.List;
 import java.util.Set;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 
 public class AppGenerator implements IClassesGenerator {
@@ -53,19 +56,44 @@ public class AppGenerator implements IClassesGenerator {
         MethodSpec mainMethod = MethodSpec.methodBuilder("main")
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
                 .addParameter(String[].class, "args")
+                .beginControlFlow("if (!initPropAndLog())")
+                .addStatement("quit(1)")
+                .endControlFlow()
                 .beginControlFlow("try ($T connection = $T.getConnection(\"$L\", \"$L\", \"$L\"))",
                         Connection.class, DriverManager.class, meta.getURL(), user, this.password)
                 .addStatement("$T exchanger = new $T(connection)", DbClientDataSender.class, DbClientDataSender.class)
                 .addStatement("System.out.println(\"✅ Successfully connected to the database [$L]. DB exchanger object created\")", dbName)
+                .addStatement("MainFrame mainFrame = new MainFrame(exchanger)")
+                .addStatement("javax.swing.SwingUtilities.invokeLater(() -> { mainFrame.setVisible(true); })")
                 .nextControlFlow("catch ($T e)", Exception.class)
                 .addStatement("System.err.println(\"❌ Connection failed: \" + e.getMessage())")
                 .addStatement("e.printStackTrace()")
                 .endControlFlow()
                 .build();
 
+        MethodSpec quitMethod = MethodSpec.methodBuilder("quit")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .addParameter(TypeName.INT, "code")
+                .addStatement("$T.getPropLogEngine().saveProps()", ExchangeFactory.class)
+                .addStatement("System.exit(code)")
+                .build();
+
+        MethodSpec initPropAndLogMethod = MethodSpec.methodBuilder("initPropAndLog")
+                .addModifiers(Modifier.PRIVATE, Modifier.STATIC)
+                .returns(TypeName.BOOLEAN)
+                .addStatement("PropLogEngine.setOwner($L.class)", capitalize(dbName))
+                .beginControlFlow("try")
+                .addStatement("$T.setPropLogEngine(PropLogEngine.getInstance($T.ALL))", ExchangeFactory.class, Level.class)
+                .nextControlFlow("catch($T.NoOwnerException ex)", PropLogEngine.class)
+                .addStatement("ex.printStackTrace()")
+                .addStatement("return false")
+                .endControlFlow()
+                .addStatement("return true")
+                .build();
+
         TypeSpec mainAppClass = TypeSpec.classBuilder(capitalize(dbName))
                 .addModifiers(Modifier.PUBLIC)
-                .addMethod(mainMethod)
+                .addMethods(List.of(mainMethod, quitMethod, initPropAndLogMethod))
                 .build();
         JavaFile javaFile = JavaFile.builder(this.packageName, mainAppClass)
                 .build();
@@ -81,6 +109,7 @@ public class AppGenerator implements IClassesGenerator {
                 .addFields(mainFrameFields())
                 .addMethods(List.of(MethodSpec.constructorBuilder()
                                         .addParameter(IMessageSender.class, "exchanger")
+                                        .addModifiers(Modifier.PUBLIC)
                                         .addStatement("super(\"Database $L\", exchanger)", dbName)
                                         .build(),
                                 MethodSpec.methodBuilder("getSheetList")
