@@ -48,9 +48,10 @@ public class Main {
         String outDir = "./generator/target/generated-sources";
         try (Connection connection = DriverManager.getConnection(url, username, password)) {
             System.out.println("✅ Successfully connected to the database.");
-            new ORMGenerator(connection, database, "org.dbdesktop.orm", MySqlType.class).generateClasses(outDir);
-            new SQLutilGenerator("org.dbdesktop.dbutil").generateClasses(outDir);
-            new AppGenerator(connection, password).generateClasses(outDir);
+            ORMGenerator ormGenerator = new ORMGenerator(connection, database, "org.dbdesktop.orm", MySqlType.class);
+            ormGenerator.generateClasses(outDir);
+//            new SQLutilGenerator("org.dbdesktop.dbutil").generateClasses(outDir);
+            new AppGenerator(connection, password, ormGenerator.getTables()).generateClasses(outDir);
         } catch (Exception e) {
             System.err.println("❌ Connection failed: " + e.getMessage());
             e.printStackTrace();

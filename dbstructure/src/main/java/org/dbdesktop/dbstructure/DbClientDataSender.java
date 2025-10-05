@@ -10,6 +10,7 @@ import java.sql.*;
 import java.util.Vector;
 
 public class DbClientDataSender implements IMessageSender {
+    private static final String NOT_SUPPORTED_YET = "Not supported yet.";
     private Connection connection;
 
     public DbClientDataSender(Connection connection) {
@@ -92,7 +93,7 @@ public class DbClientDataSender implements IMessageSender {
             if (select.toUpperCase().indexOf(" LIMIT ") > 0 || (startrow == 0 && endrow == 0)) {
                 pagedSelect = select;
             } else {
-                pagedSelect = select.replaceFirst("select", "SELECT").replaceAll("Select", "SELECT");
+                pagedSelect = select.replaceFirst("select", "SELECT").replaceFirst("Select", "SELECT");
                 pagedSelect += (" LIMIT " + (startrow - 1) + "," + (endrow - startrow + 1));
             }
             Vector line;
@@ -234,17 +235,17 @@ public class DbClientDataSender implements IMessageSender {
 
     @Override
     public void startTransaction(String transactionName) throws RemoteException {
-//        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        throw new UnsupportedOperationException(NOT_SUPPORTED_YET); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
     public void commitTransaction() throws RemoteException {
-//        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        throw new UnsupportedOperationException(NOT_SUPPORTED_YET); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
     public void rollbackTransaction(String transactionName) throws RemoteException {
-//        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        throw new UnsupportedOperationException(NOT_SUPPORTED_YET); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
