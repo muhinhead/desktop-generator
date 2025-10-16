@@ -65,9 +65,9 @@ public abstract class GeneralFrame extends JFrame implements WindowListener {
         }
     }
 
-    public GeneralFrame(IMessageSender exch) {
-        this("Works", exch);
-    }
+//    public GeneralFrame(IMessageSender exch) {
+//        this("Works", exch);
+//    }
 
     protected abstract String[] getSheetList();
 
@@ -367,39 +367,8 @@ public abstract class GeneralFrame extends JFrame implements WindowListener {
                 ExchangeFactory.getPropLogEngine().logAndShowMessage(ex);
             }
         }
-//        for (GeneralReportPanel report : reports.keySet()) {
-//            report.updateReport();
-//        }
-//        for (HTMLpanel html : browsers.keySet()) {
-//            try {
-//                html.refresh();
-//            } catch (IOException ex) {
-//                XlendWorks.logAndShowMessage(ex);
-//            }
-//        }
     }
 
-    //    public static void errMessageBox(String title, String msg) {
-//        JOptionPane.showMessageDialog(null, msg, title, JOptionPane.ERROR_MESSAGE);
-//    }
-//
-//    public static void infoMessageBox(String title, String msg) {
-//        JOptionPane.showMessageDialog(null, msg, title, JOptionPane.INFORMATION_MESSAGE);
-//    }
-//
-//    public static int yesNo(String msg, String title) {
-//        int ok = JOptionPane.showConfirmDialog(null, title, msg,
-//                JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-//        return ok;
-//    }
-//
-//    public static void notImplementedYet() {
-//        errMessageBox("Sorry!", "Not implemented yet");
-//    }
-//
-//    public static void notImplementedYet(String msg) {
-//        errMessageBox("Sorry!", "Not implemented yet " + msg);
-//    }
     public void setStatusLabel1Text(String lbl) {
         statusLabel1.setText(lbl);
     }
@@ -425,14 +394,6 @@ public abstract class GeneralFrame extends JFrame implements WindowListener {
             }
         });
         m.add(mi);
-//        m.add(XlendWorks.appearanceMenu("Theme",this));
-//        bar.add(m);
-
-//        m = createMenu("Edit", "Edit operations");
-//        mi = createMenuItem("Find...", "Search");
-//        mi.addActionListener(getSearchAction());
-//        m.add(mi);
-//        bar.add(m);
         setJMenuBar(bar);
     }
 
@@ -442,10 +403,6 @@ public abstract class GeneralFrame extends JFrame implements WindowListener {
         JMenuItem m = new JMenuItem(label);
         setMenuStatusMicroHelp(m, microHelp);
         return m;
-    }
-
-    protected JMenuItem createMenuItem(String label) {
-        return createMenuItem(label, label);
     }
 
     protected JMenu createMenu(String label, String microHelp) {
@@ -600,9 +557,6 @@ public abstract class GeneralFrame extends JFrame implements WindowListener {
                 if (pdfFile != null) {
                     Desktop desktop = Desktop.getDesktop();
                     desktop.open(pdfFile);
-//                    JOptionPane.showMessageDialog(f == null ? null : f.getRootPane(),
-//                            "File " + pdfFile.getAbsolutePath() + " generated",
-//                            "Ok!", JOptionPane.INFORMATION_MESSAGE);
                 } else {
                     JOptionPane.showMessageDialog(f == null ? null : f.getRootPane(),
                             "Can't create file " + pdfFile.getAbsolutePath()

@@ -2,19 +2,20 @@ package org.dbdesktop.generator;
 
 import com.squareup.javapoet.*;
 import org.dbdesktop.dbstructure.DbClientDataSender;
-import org.dbdesktop.guiutil.GeneralFrame;
-import org.dbdesktop.guiutil.GeneralGridPanel;
-import org.dbdesktop.guiutil.MyJideTabbedPane;
-import org.dbdesktop.guiutil.PropLogEngine;
+import org.dbdesktop.dbstructure.Table;
+import org.dbdesktop.guiutil.*;
 import org.dbdesktop.orm.ExchangeFactory;
 import org.dbdesktop.orm.IMessageSender;
 
 import javax.lang.model.element.Modifier;
 import javax.swing.*;
 import java.nio.file.Paths;
+import java.rmi.RemoteException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
@@ -100,9 +101,56 @@ public class AppGenerator implements IClassesGenerator {
         javaFile.writeTo(Paths.get(outFolder));
 
         generateMainFrame(capitalize(dbName), this.packageName, outFolder);
+
+        generateGrids(packageName, outFolder);
+    }
+
+    private void generateGrids(String packageName, String outFolder) throws Exception {
+
+        TypeName hashMapType = ParameterizedTypeName.get(
+                ClassName.get(HashMap.class),
+                ClassName.get(Integer.class),
+                ClassName.get(Integer.class)
+        );
+
+        FieldSpec maxWidthsField = FieldSpec.builder(hashMapType, "maxWidths",
+                        Modifier.PRIVATE, Modifier.STATIC)
+                .initializer("new $T<>()", HashMap.class)
+                .build();
+
+        // Static initializer block:
+        CodeBlock staticBlock = CodeBlock.builder()
+                .addStatement("maxWidths.put(0, 50)")
+                .build();
+
+        for (String tableName : Table.allTables.keySet()) {
+            String gridClassName = capitalize(tableName) + "Grid";
+
+            System.out.println("Generating "+gridClassName);
+
+            MethodSpec constructor = MethodSpec.constructorBuilder()
+                    .addModifiers(Modifier.PUBLIC)
+                    .addParameter(ClassName.get(IMessageSender.class), "exchanger")
+                    .addException(ClassName.get(RemoteException.class))
+                    .addStatement("super(exchanger,\"select * from " + tableName + " limit 100\", maxWidths, true)")
+                    .build();
+
+            TypeSpec gridClass = TypeSpec.classBuilder(gridClassName)
+                    .superclass(AbstractGridAdapter.class)
+                    .addModifiers(Modifier.PUBLIC)
+                    .addField(maxWidthsField)
+                    .addStaticBlock(staticBlock)
+                    .addMethod(constructor)
+                    .build();
+            JavaFile javaFile = JavaFile.builder(packageName, gridClass)
+                    .build();
+            // Write to file system (or print to console)
+            javaFile.writeTo(Paths.get(outFolder));
+        }
     }
 
     private void generateMainFrame(String dbName, String packageName, String outFolder) throws Exception {
+
         TypeSpec mainAppClass = TypeSpec.classBuilder("MainFrame")
                 .addModifiers(Modifier.PUBLIC)
                 .superclass(GeneralFrame.class)
@@ -129,33 +177,65 @@ public class AppGenerator implements IClassesGenerator {
                                         .build()
                         )
                 )
+                .addMethods(generateGridPanelsMethods())
                 .build();
         JavaFile javaFile = JavaFile.builder(packageName, mainAppClass)
                 .build();
         javaFile.writeTo(Paths.get(outFolder));
     }
 
+    private List<MethodSpec> generateGridPanelsMethods() {
+        ArrayList<MethodSpec> gridMethods = new ArrayList<>(Table.allTables.size());
+        for(String tabName: Table.allTables.keySet()) {
+
+            CodeBlock codeBlock = CodeBlock.builder()
+                    .beginControlFlow("if ($LPanel == null)", tabName)
+                    .beginControlFlow("try")
+                    .addStatement("registerGrid($LPanel = new $LGrid(getExchanger()))",tabName, capitalize(tabName))
+                    .nextControlFlow("catch ($T ex)", RemoteException.class)
+                    .addStatement("$T.getPropLogEngine().log(ex)", ExchangeFactory.class)
+                    .addStatement("$T.errMessageBox($T.ERROR, ex.getMessage())", GeneralUtils.class, GeneralUtils.class)
+                    .endControlFlow()
+                    .endControlFlow()
+                    .addStatement("return $LPanel", tabName)
+                    .build();
+
+            gridMethods.add(MethodSpec.methodBuilder("get"+capitalize(tabName)+"Panel")
+                    .addModifiers(Modifier.PUBLIC)
+                    .returns(JPanel.class)
+                    .addCode(codeBlock)
+                    .build());
+        }
+        return gridMethods;
+    }
+
     private CodeBlock generateTabsArrayCode() {
         CodeBlock.Builder cb = CodeBlock.builder();
-        return cb.beginControlFlow("for(String sl : sheetList)")
-                .addStatement("mainTabPanel.addTab(new $T(), sl)", JPanel.class)
-                .endControlFlow().build();
+        for(String tabName : Table.allTables.keySet()) {
+            cb.addStatement("mainTabPanel.addTab(get$LPanel(), sheetList[n++])", capitalize(tabName));
+        }
+        return cb.build();
     }
 
     private Iterable<FieldSpec> mainFrameFields() {
-        return List.of(
-                FieldSpec.builder(ClassName.bestGuess("MainFrame"), "instance")
-                        .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                        .build(),
-                FieldSpec.builder(GeneralGridPanel.class, "usersPanel")
-                        .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
-                        .build(),
-                (sheetListField = FieldSpec.builder(ArrayTypeName.of(ClassName.get(String.class)), "sheetList",
-                                Modifier.PRIVATE, Modifier.STATIC)
-                        .initializer("new String[] { $L }",
-                                getTabsHeaders())
-                        .build())
-        );
+        ArrayList<FieldSpec> flds = new ArrayList<>();
+
+        flds.add(FieldSpec.builder(ClassName.bestGuess("MainFrame"), "instance")
+                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                .build());
+        for(String tabName : Table.allTables.keySet()) {
+            flds.add(FieldSpec.builder(GeneralGridPanel.class, tabName+"Panel")
+                    .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+                    .build());
+        }
+
+        flds.add((sheetListField = FieldSpec.builder(ArrayTypeName.of(ClassName.get(String.class)), "sheetList",
+                        Modifier.PRIVATE, Modifier.STATIC)
+                .initializer("new String[] { $L }",
+                        getTabsHeaders())
+                .build()));
+
+        return flds;
     }
 
     private String getTabsHeaders() {
