@@ -38,7 +38,7 @@ public class MyColorRenderer extends JLabel implements TableCellRenderer {
             }
             this.setOpaque(true);
             String searchStr = tv.getSearchString();
-            String ceilStr = (String) line.get(column);
+            String ceilStr = line.get(column).toString();//(String) line.get(column);
             boolean found = (searchStr != null && searchStr.length() > 0 && ceilStr.toUpperCase().indexOf(searchStr.toUpperCase()) >= 0);
             Color backColor = (row % 2 == 0 && !isSelected) ? found ? searchBackColor : stripColor : (isSelected
                     ? table.getSelectionBackground()

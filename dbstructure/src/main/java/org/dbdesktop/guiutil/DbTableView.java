@@ -7,6 +7,8 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.text.ParseException;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Vector;
 
@@ -53,37 +55,12 @@ public class DbTableView extends JTable implements ITableView {
             return (getValueAt(row, col).getClass().equals(Boolean.class));
         }
 
-        //        public Object getValueAt(int row, int col) {
-//            try {
-//                Vector line = (Vector) rowData.get(row);
-//                return line.get(colNumAdjusted(col));
-//            } catch (ArrayIndexOutOfBoundsException ae) {
-//                return "";
-//            }
-//        }
         public Object getValueAt(int row, int col) {
             try {
                 Vector line = (Vector) rowData.get(row);
-                String originalValue = (String) line.get(colNumAdjusted(col));
-//                try {
-//                    return americanDateFormat.parse(originalValue);
-//                } catch (ParseException ex) {
-//                }
-                if (!getColumnName(col).equals("ID Number") && !getColumnName(col).equals("Order No")
-                        && originalValue.length() > 0 && originalValue.charAt(0) != '0') {
-                    try {
-                        return Integer.parseInt(originalValue);
-                    } catch (NumberFormatException ne) {
-                    }
-                    try {
-                        return Double.parseDouble(originalValue);
-                    } catch (NumberFormatException ne) {
-                    }
-                }
-                return originalValue;
-//                return "<html><h2>"+originalValue+"</h2></html>";
+                return line.get(colNumAdjusted(col)).toString();
             } catch (ArrayIndexOutOfBoundsException ae) {
-                return "";
+                return null;
             }
         }
 
@@ -91,14 +68,14 @@ public class DbTableView extends JTable implements ITableView {
             Vector line = (Vector) rowData.get(row);
             line.set(colNumAdjusted(col), val);
             fireTableCellUpdated(row, colNumAdjusted(col));
-            synchronize();//new Integer(row));
+            synchronize();
         }
 
         public Class getColumnClass(int c) {
             try {
                 return getValueAt(0, c).getClass();
             } catch (NullPointerException e) {
-                return String.class;
+                return Object.class;
             }
         }
     }
@@ -167,8 +144,26 @@ public class DbTableView extends JTable implements ITableView {
         }
         if (getModel() != tableModel) {
             setModel(tableModel);
-            sorter = new TableRowSorter<MyTableModel>(tableModel);
-            setRowSorter(getSorter());
+            this.sorter = new TableRowSorter<MyTableModel>(tableModel) {
+                @Override
+                public Comparator<?> getComparator(int column) {
+                    return new Comparator<Object>() {
+                        @Override
+                        public int compare(Object o1, Object o2) {
+                            if (o1 == null || o2 == null)
+                                return 0;
+                            try {
+                                double n1 = Double.parseDouble(o1.toString());
+                                double n2 = Double.parseDouble(o2.toString());
+                                return Double.compare(n1, n2);
+                            } catch (NumberFormatException e) {
+                                return o1.toString().compareTo(o2.toString());
+                            }
+                        }
+                    };
+                }
+            };
+            setRowSorter(this.sorter);
 //            RowFilter<MyTableModel, Object> rf = null;
 //            try {
 //                rf = RowFilter.regexFilter(filterText.getText(), 0);

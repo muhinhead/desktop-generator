@@ -112,8 +112,13 @@ public class DbClientDataSender implements IMessageSender {
             while (rs.next()) {
                 line = new Vector();
                 for (int c = 0; c < cols; c++) {
-                    String ceil = rs.getString(c + 1);
-                    ceil = ceil == null ? "" : ceil;
+                    Object ceil = rs.getObject(c+1);
+                    if(ceil != null && ceil instanceof Integer) {
+                        //
+                    } else {
+                        ceil = rs.getString(c + 1);
+                        ceil = ceil == null ? "" : ceil;
+                    }
                     line.add(ceil);
                 }
                 rows.add(line);
@@ -140,7 +145,7 @@ public class DbClientDataSender implements IMessageSender {
 
     private PreparedStatement prepareStatement(String select) throws SQLException {
         PreparedStatement ps = null;
-        if (url != null && (connection == null || connection.isClosed())) {
+        if (url != null && (connection == null || !connection.isValid(2))) {
             try {
                 connection = DriverManager.getConnection(url, user, password);
             } catch (Exception e) {
@@ -150,7 +155,6 @@ public class DbClientDataSender implements IMessageSender {
             }
         }
         synchronized (connection) {
-            System.out.println("CONNECTION CLOSED STATUS: " + connection.isClosed());
             ps = connection.prepareStatement(select);
         }
         return ps;
