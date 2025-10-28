@@ -361,10 +361,15 @@ public abstract class GeneralFrame extends JFrame implements WindowListener {
     private void refreshGrids() {
         for (DbTableGridPanel grid : grids.keySet()) {
             try {
-                updateGrid(getExchanger(), grid.getTableView(), grid.getTableDoc(), grids.get(grid), null,
-                        grid.getPageSelector().getSelectedIndex());
+                updateGrid(
+                        getExchanger(),
+                        grid.getTableView(),
+                        grid.getTableDoc(), grids.get(grid), null,
+                        grid.getPageSelector().getSelectedIndex()
+                );
             } catch (RemoteException ex) {
                 ExchangeFactory.getPropLogEngine().logAndShowMessage(ex);
+                ex.printStackTrace();
             }
         }
     }

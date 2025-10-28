@@ -1,6 +1,7 @@
 package org.dbdesktop.dbstructure;
 
 import org.dbdesktop.orm.DbObject;
+import org.dbdesktop.orm.ExchangeFactory;
 import org.dbdesktop.orm.IMessageSender;
 
 import java.lang.reflect.Constructor;
@@ -11,10 +12,19 @@ import java.util.Vector;
 
 public class DbClientDataSender implements IMessageSender {
     private static final String NOT_SUPPORTED_YET = "Not supported yet.";
-    private Connection connection;
+    private Connection connection = null;
+    private String url = null;
+    private String user = null;
+    private String password = null;
 
     public DbClientDataSender(Connection connection) {
         this.connection = connection;
+    }
+
+    public DbClientDataSender(String url, String user, String password) {
+        this.url = url;
+        this.user = user;
+        this.password = password;
     }
 
     @Override
@@ -128,6 +138,24 @@ public class DbClientDataSender implements IMessageSender {
         }
     }
 
+    private PreparedStatement prepareStatement(String select) throws SQLException {
+        PreparedStatement ps = null;
+        if (url != null && (connection == null || connection.isClosed())) {
+            try {
+                connection = DriverManager.getConnection(url, user, password);
+            } catch (Exception e) {
+                ExchangeFactory.getPropLogEngine().logAndShowMessage(e);
+                System.err.println("❌ Connection failed: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
+        synchronized (connection) {
+            System.out.println("CONNECTION CLOSED STATUS: " + connection.isClosed());
+            ps = connection.prepareStatement(select);
+        }
+        return ps;
+    }
+
     public Vector getColNames(String select) throws RemoteException {
         String original = null;
         Vector colNames = new Vector();
@@ -155,7 +183,7 @@ public class DbClientDataSender implements IMessageSender {
             if (sb != null) {
                 select = sb.toString();
             }
-            ps = connection.prepareStatement(select);
+            ps = prepareStatement(select);
             rs = ps.executeQuery();
             ResultSetMetaData md = rs.getMetaData();
             for (i = 0; i < md.getColumnCount(); i++) {
@@ -190,7 +218,7 @@ public class DbClientDataSender implements IMessageSender {
         PreparedStatement ps = null;
         ResultSet rs = null;
         try {
-            ps = connection.prepareStatement(slct.toString());
+            ps = prepareStatement(slct.toString());
             rs = ps.executeQuery();
             if (rs.next()) {
                 count = rs.getInt(1);
@@ -220,7 +248,7 @@ public class DbClientDataSender implements IMessageSender {
         boolean ok = false;
         PreparedStatement ps = null;
         try {
-            ps = connection.prepareStatement("truncate " + tableName);
+            ps = prepareStatement("truncate " + tableName);
             ok = ps.execute();
         } catch (SQLException ex) {
             throw new java.rmi.RemoteException(ex.getMessage());

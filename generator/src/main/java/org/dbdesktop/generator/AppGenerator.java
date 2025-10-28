@@ -60,9 +60,12 @@ public class AppGenerator implements IClassesGenerator {
                 .beginControlFlow("if (!initPropAndLog())")
                 .addStatement("quit(1)")
                 .endControlFlow()
-                .beginControlFlow("try ($T connection = $T.getConnection(\"$L\", \"$L\", \"$L\"))",
-                        Connection.class, DriverManager.class, meta.getURL(), user, this.password)
-                .addStatement("$T exchanger = new $T(connection)", DbClientDataSender.class, DbClientDataSender.class)
+                .addStatement("String url = \"$L\"", meta.getURL())
+                .addStatement("String user = \"$L\"", user)
+                .addStatement("String password = \"$L\"", this.password)
+                .beginControlFlow("try ($T connection = $T.getConnection(url, user, password))",
+                        Connection.class, DriverManager.class)
+                .addStatement("$T exchanger = new $T(url, user, password)", DbClientDataSender.class, DbClientDataSender.class)
                 .addStatement("System.out.println(\"✅ Successfully connected to the database [$L]. DB exchanger object created\")", dbName)
                 .addStatement("MainFrame mainFrame = new MainFrame(exchanger)")
                 .addStatement("javax.swing.SwingUtilities.invokeLater(() -> { mainFrame.setVisible(true); })")
