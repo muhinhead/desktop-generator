@@ -12,10 +12,8 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Paths;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Set;
+import java.sql.Date;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class ORMGenerator implements IClassesGenerator {
@@ -76,7 +74,8 @@ public class ORMGenerator implements IClassesGenerator {
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     columnList.add(new Column(rs.getInt(1),
-                            rs.getString(2), getAbstractSqlType(rs.getString(3)),
+                            rs.getString(2), null, //TODO: assign comment
+                            getAbstractSqlType(rs.getString(3)),
                             rs.getInt(4), rs.getInt(5), rs.getString(6).equals("YES"),
                             rs.getString(7).equals("YES")));
                 }
@@ -481,13 +480,13 @@ public class ORMGenerator implements IClassesGenerator {
 
     public Set<String> getTables() throws Exception {
         if (Table.allTables.isEmpty()) {
-            String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE'";
+            String sql = "SELECT table_name, table_comment FROM information_schema.tables WHERE table_schema = ? AND table_type = 'BASE TABLE'";
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setString(1, this.database);
                 try (ResultSet rs = stmt.executeQuery()) {
                     while (rs.next()) {
                         String tableName = rs.getString("table_name");
-                        Table table = new Table(tableName);
+                        Table table = new Table(tableName, rs.getString("table_comment"));
                         table.setColumns(getTableColumns(tableName));
                         Table.allTables.put(tableName, table);
                     }
@@ -507,6 +506,14 @@ public class ORMGenerator implements IClassesGenerator {
 //            );
         }
         return Table.allTables.keySet();
+    }
+
+    public ArrayList<String> getTablesHeaders() {
+        ArrayList<String> tabHeaders = new ArrayList<>(Table.allTables.size());
+        for(Table table : Table.allTables.values()) {
+            tabHeaders.add(table.getHeader());
+        }
+        return tabHeaders;
     }
 
     private List<ForeignKey> getTableForeignKeys(Table table) throws SQLException {

@@ -44,14 +44,14 @@ public class Main {
         }
 
 
-        String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC";
+        String url = "jdbc:mysql://" + host + ":" + port + "/" + database + "?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC&zeroDateTimeBehavior=CONVERT_TO_NULL";
         String outDir = "./generator/target/generated-sources";
         try (Connection connection = DriverManager.getConnection(url, username, password)) {
             System.out.println("✅ Successfully connected to the database.");
             ORMGenerator ormGenerator = new ORMGenerator(connection, database, "org.dbdesktop.orm", MySqlType.class);
             ormGenerator.generateClasses(outDir);
 //            new SQLutilGenerator("org.dbdesktop.dbutil").generateClasses(outDir);
-            new AppGenerator(connection, password, ormGenerator.getTables()).generateClasses(outDir);
+            new AppGenerator(connection, password, ormGenerator.getTablesHeaders()).generateClasses(outDir);
         } catch (Exception e) {
             System.err.println("❌ Connection failed: " + e.getMessage());
             e.printStackTrace();

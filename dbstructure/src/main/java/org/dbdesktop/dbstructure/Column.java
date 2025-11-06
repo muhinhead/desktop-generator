@@ -1,17 +1,16 @@
 package org.dbdesktop.dbstructure;
 
-public class Column {
+public class Column extends NamedEssence {
     private int number;
-    private String name = null;
     private AbstractSqlType type = null;
     private Integer length = null;
     private Integer precision = null;
     private boolean isNullable = true;
     private boolean isPrimary = true;
 
-    public Column(int number, String name, AbstractSqlType type, Integer length, Integer precision, boolean isNullable, boolean isPrimary) {
+    public Column(int number, String name, String comment, AbstractSqlType type, Integer length, Integer precision, boolean isNullable, boolean isPrimary) {
+        super(name, comment);
         this.number = number;
-        this.name = name;
         this.type = type;
         this.length = length;
         this.precision = precision;
@@ -27,13 +26,9 @@ public class Column {
         this.number = number;
     }
 
-    public String getName() {
-        return name;
-    }
-
     public String getJavaName() {
         StringBuilder javaName = new StringBuilder();
-        char[] arr = name.toCharArray();
+        char[] arr = getName().toCharArray();
         boolean nextBig = false;
         for (char c : arr) {
             if (c == '_') {
@@ -46,10 +41,6 @@ public class Column {
             }
         }
         return javaName.toString();
-    }
-
-    public void setName(String name) {
-        this.name = name;
     }
 
     public AbstractSqlType getType() {

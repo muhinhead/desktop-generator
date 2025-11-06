@@ -5,23 +5,15 @@ import org.jetbrains.annotations.NotNull;
 import java.util.HashMap;
 import java.util.List;
 
-public class Table {
-    private String name;
+public class Table extends NamedEssence {
     public static HashMap<String, Table> allTables = new HashMap<String, Table>();
-    public Table(String name) {
-        setName(name);
+
+    public Table(String name, String comment) {
+        super(name, comment);
     }
     private List<Column> columns;
     private Column primaryColumn = null;
     private List<ForeignKey> foreignKeys;
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
 
     public List<Column> getColumns() {
         return columns;

@@ -23,13 +23,13 @@ import java.util.stream.Collectors;
 
 public class AppGenerator implements IClassesGenerator {
 
-    private final Set<String> tables;
+    private final ArrayList<String> tables;
     private String packageName;
     private final String password;
     private Connection connection;
     private FieldSpec sheetListField;
 
-    public AppGenerator(Connection connection, String password, Set<String> tables) {
+    public AppGenerator(Connection connection, String password, ArrayList<String> tables) {
         this.connection = connection;
         this.password = password;
         this.tables = tables;
@@ -135,7 +135,7 @@ public class AppGenerator implements IClassesGenerator {
                     .addModifiers(Modifier.PUBLIC)
                     .addParameter(ClassName.get(IMessageSender.class), "exchanger")
                     .addException(ClassName.get(RemoteException.class))
-                    .addStatement("super(exchanger,\"select * from " + tableName + " limit 100\", maxWidths, true)")
+                    .addStatement("super(exchanger,\"select * from " + tableName + " limit 10000\", maxWidths, true)")
                     .build();
 
             TypeSpec gridClass = TypeSpec.classBuilder(gridClassName)
@@ -189,21 +189,21 @@ public class AppGenerator implements IClassesGenerator {
 
     private List<MethodSpec> generateGridPanelsMethods() {
         ArrayList<MethodSpec> gridMethods = new ArrayList<>(Table.allTables.size());
-        for(String tabName: Table.allTables.keySet()) {
+        for(Table table: Table.allTables.values()) {
 
             CodeBlock codeBlock = CodeBlock.builder()
-                    .beginControlFlow("if ($LPanel == null)", tabName)
+                    .beginControlFlow("if ($LPanel == null)", table.getName())
                     .beginControlFlow("try")
-                    .addStatement("registerGrid($LPanel = new $LGrid(getExchanger()))",tabName, capitalize(tabName))
+                    .addStatement("registerGrid($LPanel = new $LGrid(getExchanger()))",table.getName(), capitalize(table.getName()))
                     .nextControlFlow("catch ($T ex)", RemoteException.class)
                     .addStatement("$T.getPropLogEngine().log(ex)", ExchangeFactory.class)
                     .addStatement("$T.errMessageBox($T.ERROR, ex.getMessage())", GeneralUtils.class, GeneralUtils.class)
                     .endControlFlow()
                     .endControlFlow()
-                    .addStatement("return $LPanel", tabName)
+                    .addStatement("return $LPanel", table.getName())
                     .build();
 
-            gridMethods.add(MethodSpec.methodBuilder("get"+capitalize(tabName)+"Panel")
+            gridMethods.add(MethodSpec.methodBuilder("get"+capitalize(table.getName())+"Panel")
                     .addModifiers(Modifier.PUBLIC)
                     .returns(JPanel.class)
                     .addCode(codeBlock)
@@ -214,8 +214,9 @@ public class AppGenerator implements IClassesGenerator {
 
     private CodeBlock generateTabsArrayCode() {
         CodeBlock.Builder cb = CodeBlock.builder();
-        for(String tabName : Table.allTables.keySet()) {
-            cb.addStatement("mainTabPanel.addTab(get$LPanel(), sheetList[n++])", capitalize(tabName));
+        for(Table table : Table.allTables. values()) {
+            cb.addStatement("mainTabPanel.addTab(get$LPanel(), sheetList[n++])", capitalize(table.getName()));
+            //System.out.println("TABLE:"+table.getName()+" HEADER:"+table.getHeader());
         }
         return cb.build();
     }
