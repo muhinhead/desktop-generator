@@ -190,8 +190,11 @@ public class DbClientDataSender implements IMessageSender {
             ps = prepareStatement(select);
             rs = ps.executeQuery();
             ResultSetMetaData md = rs.getMetaData();
+
+
             for (i = 0; i < md.getColumnCount(); i++) {
-                colNames.add(md.getColumnLabel(i + 1));
+                String columnAlias = getColumnAlias(md.getTableName(1), md.getColumnLabel(i + 1));
+                colNames.add(columnAlias);
             }
         } catch (SQLException ex) {
             throw new java.rmi.RemoteException(ex.getMessage());
@@ -211,6 +214,27 @@ public class DbClientDataSender implements IMessageSender {
             }
         }
         return colNames;
+    }
+
+    private String getColumnAlias(String tableName, String columnLabel) throws SQLException {
+        String sql = "SELECT COLUMN_COMMENT " +
+                "FROM INFORMATION_SCHEMA.COLUMNS " +
+                "WHERE TABLE_SCHEMA = DATABASE() " +
+                "  AND TABLE_NAME = ?" +
+                "  AND COLUMN_NAME = ?";
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, tableName);
+            stmt.setString(2, columnLabel);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    String colAlias = rs.getString(1);
+                    if(!colAlias.isBlank()) {
+                        return colAlias;
+                    }
+                }
+            }
+        }
+        return columnLabel;
     }
 
     @Override

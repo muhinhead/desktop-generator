@@ -57,6 +57,7 @@ public class DbTableDocument extends Document {
             }
             rs = ps.executeQuery();
             ResultSetMetaData md = rs.getMetaData();
+            //System.out.println("md.getTableName()->"+md.getTableName(1));
             for (int i = 0; i < md.getColumnCount(); i++) {
                 colNames.add(md.getColumnLabel(i + 1));
             }
