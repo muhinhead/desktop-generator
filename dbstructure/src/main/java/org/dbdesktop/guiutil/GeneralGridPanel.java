@@ -4,12 +4,45 @@ import org.dbdesktop.orm.ExchangeFactory;
 import org.dbdesktop.orm.IMessageSender;
 
 import javax.swing.*;
+import javax.swing.table.JTableHeader;
+import javax.swing.table.TableColumn;
+import javax.swing.table.TableColumnModel;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.rmi.RemoteException;
-import java.util.HashMap;
-import java.util.Vector;
+import java.util.*;
 
 public abstract class GeneralGridPanel extends DbTableGridPanel {
+
+    private static class ColumnParams {
+        static Hashtable<String, ColumnParams> all = new Hashtable<>();
+        String columnName;
+        int minWidth;
+        int maxWidth;
+        int preferredWidth;
+        boolean isResizable;
+
+        ColumnParams(TableColumn column) {
+            this.columnName = column.getHeaderValue().toString();
+            this.minWidth = column.getMinWidth();
+            this.maxWidth = column.getMaxWidth();
+            this.preferredWidth = column.getPreferredWidth();
+            this.isResizable = column.getResizable();
+            all.put(columnName, this);
+        }
+
+        static void restore(TableColumn column) {
+            ColumnParams params = all.get(column.getHeaderValue().toString());
+            if (params != null) {
+                column.setMinWidth(params.minWidth);
+                column.setMaxWidth(params.maxWidth);
+                column.setPreferredWidth(params.preferredWidth);
+                column.setResizable(params.isResizable);
+            }
+        }
+    }
 
     public static final int PAGESIZE = 0;//5000;
 
@@ -30,7 +63,63 @@ public abstract class GeneralGridPanel extends DbTableGridPanel {
                 select, exchanger.getTableBody(select, 0, GeneralGridPanel.PAGESIZE), maxWidths, tabView);
         setIsMultilineSelection(false);
         refreshTotalRows();
+        addHeaderPopupMenu();
     }
+
+    private void addHeaderPopupMenu() {
+
+        JTableHeader header = getTableView().getTableHeader();
+        JPopupMenu headerMenu = new JPopupMenu();
+        TableColumnModel liveModel = getTableView().getColumnModel();
+        LinkedHashMap<String, TableColumn> columnMap = new LinkedHashMap<>(liveModel.getColumnCount());
+
+        for (int i = 0; i < liveModel.getColumnCount(); i++) {
+            TableColumn col = liveModel.getColumn(i);
+            String name = col.getHeaderValue().toString();
+            JCheckBoxMenuItem item = new JCheckBoxMenuItem(name, true);
+            headerMenu.add(item);
+            columnMap.put(name, col);
+            item.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    toggleColumnVisibility(item.getText(), item.isSelected());
+                }
+
+                private void toggleColumnVisibility(String colName, boolean selected) {
+                    TableColumnModel liveModel = getTableView().getColumnModel();
+                    for (int i = 0; i < liveModel.getColumnCount(); i++) {
+                        TableColumn column = liveModel.getColumn(i);
+                        if(column.getHeaderValue().toString().equals(colName)) {
+                            if(selected) {
+                                ColumnParams.restore(column);
+                            } else {
+                                new ColumnParams(column);
+                                column.setMinWidth(0);
+                                column.setMaxWidth(0);
+                                column.setPreferredWidth(0);
+                                column.setResizable(false);
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        header.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) { maybeShowPopup(e); }
+            @Override
+            public void mouseReleased(MouseEvent e) { maybeShowPopup(e); }
+
+            private void maybeShowPopup(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    // keep checkboxes synced before showing
+                    headerMenu.show(header, e.getX(), e.getY());
+                }
+            }
+        });
+    }
+
 
     public GeneralGridPanel(IMessageSender exchanger, String select,
                             HashMap<Integer, Integer> maxWidths, boolean readOnly) throws RemoteException {
@@ -110,7 +199,7 @@ public abstract class GeneralGridPanel extends DbTableGridPanel {
 
     public void updatePageCounter(String select) throws RemoteException {
         int qty = exchanger.getCount(select);
-        int pagesCount = GeneralGridPanel.PAGESIZE==0 ? 1 : qty / GeneralGridPanel.PAGESIZE + 1;
+        int pagesCount = GeneralGridPanel.PAGESIZE == 0 ? 1 : qty / GeneralGridPanel.PAGESIZE + 1;
         DefaultComboBoxModel model = new DefaultComboBoxModel();
         for (int i = 0; i < pagesCount; i++) {
             int maxrow = ((i + 1) * GeneralGridPanel.PAGESIZE + 1);

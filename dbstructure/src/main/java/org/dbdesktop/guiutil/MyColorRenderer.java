@@ -38,15 +38,19 @@ public class MyColorRenderer extends JLabel implements TableCellRenderer {
             }
             this.setOpaque(true);
             String searchStr = tv.getSearchString();
-            String ceilStr = line.get(column).toString();//(String) line.get(column);
-            boolean found = (searchStr != null && searchStr.length() > 0 && ceilStr.toUpperCase().indexOf(searchStr.toUpperCase()) >= 0);
-            Color backColor = (row % 2 == 0 && !isSelected) ? found ? searchBackColor : stripColor : (isSelected
-                    ? table.getSelectionBackground()
-                    : found ? searchBackColor : table.getBackground());
-            Color foreColor = isSelected ? found ? searchStringColor : table.getSelectionForeground()
-                    : found ? searchStringColor : table.getForeground();
-            setBackground(backColor);
-            setForeground(foreColor);
+            try {
+                String ceilStr = line.get(column).toString();//(String) line.get(column);
+                boolean found = (searchStr != null && searchStr.length() > 0 && ceilStr.toUpperCase().indexOf(searchStr.toUpperCase()) >= 0);
+                Color backColor = (row % 2 == 0 && !isSelected) ? found ? searchBackColor : stripColor : (isSelected
+                        ? table.getSelectionBackground()
+                        : found ? searchBackColor : table.getBackground());
+                Color foreColor = isSelected ? found ? searchStringColor : table.getSelectionForeground()
+                        : found ? searchStringColor : table.getForeground();
+                setBackground(backColor);
+                setForeground(foreColor);
+            } catch(ArrayIndexOutOfBoundsException ae) {
+
+            }
         }
         return this;
     }
