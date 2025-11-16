@@ -17,7 +17,6 @@ import java.sql.DriverManager;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -129,7 +128,7 @@ public class AppGenerator implements IClassesGenerator {
         for (String tableName : Table.allTables.keySet()) {
             String gridClassName = capitalize(tableName) + "Grid";
 
-            System.out.println("Generating "+gridClassName);
+            System.out.println("Generating " + gridClassName);
 
             MethodSpec constructor = MethodSpec.constructorBuilder()
                     .addModifiers(Modifier.PUBLIC)
@@ -175,7 +174,10 @@ public class AppGenerator implements IClassesGenerator {
                                         .returns(JTabbedPane.class)
                                         .addStatement("int n = 0")
                                         .addStatement("$T mainTabPanel = new $T()", MyJideTabbedPane.class, MyJideTabbedPane.class)
+                                        //.addStatement("mainTabPanel.addMouseListener(new @T(popMenu))", PopupListener.class)
                                         .addCode(generateTabsArrayCode())
+                                        .addCode(generateTabPopupMenu())
+                                        .addStatement("mainTabPanel.addMouseListener(new $T(popMenu))", PopupListener.class)
                                         .addStatement("return mainTabPanel")
                                         .build()
                         )
@@ -189,12 +191,12 @@ public class AppGenerator implements IClassesGenerator {
 
     private List<MethodSpec> generateGridPanelsMethods() {
         ArrayList<MethodSpec> gridMethods = new ArrayList<>(Table.allTables.size());
-        for(Table table: Table.allTables.values()) {
+        for (Table table : Table.allTables.values()) {
 
             CodeBlock codeBlock = CodeBlock.builder()
                     .beginControlFlow("if ($LPanel == null)", table.getName())
                     .beginControlFlow("try")
-                    .addStatement("registerGrid($LPanel = new $LGrid(getExchanger()))",table.getName(), capitalize(table.getName()))
+                    .addStatement("registerGrid($LPanel = new $LGrid(getExchanger()))", table.getName(), capitalize(table.getName()))
                     .nextControlFlow("catch ($T ex)", RemoteException.class)
                     .addStatement("$T.getPropLogEngine().log(ex)", ExchangeFactory.class)
                     .addStatement("$T.errMessageBox($T.ERROR, ex.getMessage())", GeneralUtils.class, GeneralUtils.class)
@@ -203,7 +205,7 @@ public class AppGenerator implements IClassesGenerator {
                     .addStatement("return $LPanel", table.getName())
                     .build();
 
-            gridMethods.add(MethodSpec.methodBuilder("get"+capitalize(table.getName())+"Panel")
+            gridMethods.add(MethodSpec.methodBuilder("get" + capitalize(table.getName()) + "Panel")
                     .addModifiers(Modifier.PUBLIC)
                     .returns(JPanel.class)
                     .addCode(codeBlock)
@@ -212,11 +214,40 @@ public class AppGenerator implements IClassesGenerator {
         return gridMethods;
     }
 
+    public CodeBlock generateTabPopupMenu() {
+        CodeBlock.Builder cb = CodeBlock.builder();
+        cb.addStatement("$T popMenu = new $T()", JPopupMenu.class, JPopupMenu.class);
+        int n = 0;
+        for (Table table : Table.allTables.values()) {
+
+            cb.addStatement("$T item" + n, JCheckBoxMenuItem.class);
+            cb.addStatement("popMenu.add(item" + n + " = new $T(sheetList[" + n + "], true))", JCheckBoxMenuItem.class);
+
+            TypeSpec actionListener = TypeSpec.anonymousClassBuilder("")
+                    .superclass(ClassName.get("javax.swing", "AbstractAction"))
+                    .addMethod(MethodSpec.methodBuilder("actionPerformed")
+                            .addAnnotation(Override.class)
+                            .addModifiers(Modifier.PUBLIC)
+                            .returns(void.class)
+                            .addParameter(ClassName.get("java.awt.event", "ActionEvent"), "e")
+                            .addStatement("if (item"+n+".isSelected()) {")
+                            .addStatement("    mainTabPanel.addTab(get$LPanel(), sheetList["+n+"])", capitalize(table.getName()))
+                            .addStatement("} else {")
+                            .addStatement("    mainTabPanel.remove(get$LPanel())", capitalize(table.getName()))
+                            .addStatement("}")
+                            .build())
+                    .build();
+
+            cb.addStatement("item"+n+".addActionListener($L)", actionListener);
+            n++;
+        }
+        return cb.build();
+    }
+
     private CodeBlock generateTabsArrayCode() {
         CodeBlock.Builder cb = CodeBlock.builder();
-        for(Table table : Table.allTables. values()) {
+        for (Table table : Table.allTables.values()) {
             cb.addStatement("mainTabPanel.addTab(get$LPanel(), sheetList[n++])", capitalize(table.getName()));
-            //System.out.println("TABLE:"+table.getName()+" HEADER:"+table.getHeader());
         }
         return cb.build();
     }
@@ -227,8 +258,8 @@ public class AppGenerator implements IClassesGenerator {
         flds.add(FieldSpec.builder(ClassName.bestGuess("MainFrame"), "instance")
                 .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
                 .build());
-        for(String tabName : Table.allTables.keySet()) {
-            flds.add(FieldSpec.builder(GeneralGridPanel.class, tabName+"Panel")
+        for (String tabName : Table.allTables.keySet()) {
+            flds.add(FieldSpec.builder(GeneralGridPanel.class, tabName + "Panel")
                     .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
                     .build());
         }

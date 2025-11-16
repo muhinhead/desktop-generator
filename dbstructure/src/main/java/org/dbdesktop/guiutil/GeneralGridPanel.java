@@ -44,7 +44,7 @@ public abstract class GeneralGridPanel extends DbTableGridPanel {
         }
     }
 
-    public static final int PAGESIZE = 0;//5000;
+    public static final int PAGESIZE = 0;
 
     private String select;
     protected IMessageSender exchanger;
