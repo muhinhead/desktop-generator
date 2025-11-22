@@ -216,7 +216,9 @@ public class AppGenerator implements IClassesGenerator {
 
     public CodeBlock generateTabPopupMenu() {
         CodeBlock.Builder cb = CodeBlock.builder();
+        //cb.addStatement("$T popMenu = new $T(600)", ScrollablePopupMenu.class, ScrollablePopupMenu.class);
         cb.addStatement("$T popMenu = new $T()", JPopupMenu.class, JPopupMenu.class);
+        cb.addStatement("popMenu.setLightWeightPopupEnabled(false)");
         int n = 0;
         for (Table table : Table.allTables.values()) {
 
