@@ -9,6 +9,7 @@ import org.dbdesktop.orm.IMessageSender;
 
 import javax.lang.model.element.Modifier;
 import javax.swing.*;
+import java.awt.event.ActionEvent;
 import java.nio.file.Paths;
 import java.rmi.RemoteException;
 import java.sql.Connection;
@@ -103,7 +104,7 @@ public class AppGenerator implements IClassesGenerator {
         javaFile.writeTo(Paths.get(outFolder));
 
         generateMainFrame(capitalize(dbName), this.packageName, outFolder);
-
+        generateEditPanels(packageName, outFolder);
         generateGrids(packageName, outFolder);
     }
 
@@ -134,8 +135,46 @@ public class AppGenerator implements IClassesGenerator {
                     .addModifiers(Modifier.PUBLIC)
                     .addParameter(ClassName.get(IMessageSender.class), "exchanger")
                     .addException(ClassName.get(RemoteException.class))
-                    .addStatement("super(exchanger,\"select * from " + tableName + " limit 10000\", maxWidths, true)")
+                    .addStatement("super(exchanger,\"select * from " + tableName + " limit 10000\", maxWidths, false)")
                     .build();
+
+            String editPanelClass = "Edit"+capitalize(tableName)+"Panel";
+
+            MethodSpec addAction = MethodSpec.methodBuilder("addAction")
+                    .addModifiers(Modifier.PROTECTED)
+                    .addAnnotation(Override.class)
+                    .returns(AbstractAction.class)
+                    .addStatement("return new $T($S) {\n"
+                                    + "    @Override\n"
+                                    + "    public void actionPerformed($T e) {\n"
+                                    + "        try {\n"
+                                    + "            $T<$L> dlg = new $T<>($L.class, $S, null);\n"
+                                    + "            if (dlg.isOkPressed()) {\n"
+                                    + "                $T.updateGrid(exchanger, getTableView(),\n"
+                                    + "                        getTableDoc(), getSelect(), null, getPageSelector().getSelectedIndex());\n"
+                                    + "            }\n"
+                                    + "        } catch ($T ex) {\n"
+                                    + "            $T.getPropLogEngine().log(ex);\n"
+                                    + "            $T.errMessageBox($T.ERROR, ex.getMessage());\n"
+                                    + "        }\n"
+                                    + "    }\n"
+                                    + "}",
+                            AbstractAction.class,
+                            "Add",
+                            ActionEvent.class,
+                            GenericEditDialog.class,
+                            editPanelClass,
+                            GenericEditDialog.class,
+                            editPanelClass,
+                            "Add "+capitalize(tableName),
+                            GeneralFrame.class,
+                            RemoteException.class,
+                            ExchangeFactory.class,
+                            GeneralUtils.class,
+                            GeneralUtils.class
+                    )
+                    .build();
+
 
             TypeSpec gridClass = TypeSpec.classBuilder(gridClassName)
                     .superclass(AbstractGridAdapter.class)
@@ -143,12 +182,87 @@ public class AppGenerator implements IClassesGenerator {
                     .addField(maxWidthsField)
                     .addStaticBlock(staticBlock)
                     .addMethod(constructor)
+                    .addMethod(addAction)
                     .build();
             JavaFile javaFile = JavaFile.builder(packageName, gridClass)
                     .build();
             // Write to file system (or print to console)
             javaFile.writeTo(Paths.get(outFolder));
         }
+    }
+
+    private void generateEditPanels(String packageName, String outFolder) throws Exception {
+        for (Table table : Table.allTables.values()) {
+            //ClassName myImport = ClassName.get("org.dbdesktop.orm", capitalize(table.getName()));
+            TypeSpec editPanelClass = TypeSpec.classBuilder("Edit"+capitalize(table.getName())+"Panel")
+                    .addModifiers(Modifier.PUBLIC)
+                    .superclass(RecordEditPanel.class)
+                    .addMethods(getEditPanelsMethods(table))
+                    .build();
+
+                    JavaFile javaFile = JavaFile.builder(packageName, editPanelClass)
+                            //.addStaticImport(myImport)
+                            .build();
+            javaFile.writeTo(Paths.get(outFolder));
+        }
+    }
+
+    private List<MethodSpec> getEditPanelsMethods(Table table) {
+        return List.of(
+                MethodSpec.methodBuilder("fillContent")
+                        .addAnnotation(Override.class)
+                        .addModifiers(Modifier.PROTECTED)
+                        .returns(void.class)
+                        .addCode(CodeBlock.builder()
+                                .add("// TODO: Add widget building UI code here\n")
+                                .build())
+                        .build(),
+                MethodSpec.methodBuilder("loadData")
+                        .addAnnotation(Override.class)
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(void.class)
+                        .addCode(CodeBlock.builder()
+                                .addStatement("org.dbdesktop.orm.$L $L = (org.dbdesktop.orm.$L) getDbObject()",
+                                        capitalize(table.getName()),
+                                        table.getName(),
+                                        capitalize(table.getName()))
+                                .add("// TODO: Your actual widget loading logic\n")
+                                .beginControlFlow("if ($L != null)", table.getName())
+                                .addStatement("isViewOnly = $L.getPK_ID() < 0", table.getName())
+                                .addStatement("idField.setText(String.valueOf(Math.abs($L.getPK_ID().intValue())))", table.getName())
+                                .add("// TODO: Add more widget loads...\n")
+                                .endControlFlow()
+                                .add("// TODO: Continue with other parts of load logic...\n")
+                                .build())
+                        .build(),
+                MethodSpec.methodBuilder("save")
+                        .addAnnotation(Override.class)
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(boolean.class)
+                        .addException(Exception.class)
+                        .addCode(CodeBlock.builder()
+                                .addStatement("boolean isNew = true")
+                                .addStatement("org.dbdesktop.orm.$L $L = (org.dbdesktop.orm.$L) getDbObject()",
+                                        capitalize(table.getName()),
+                                        table.getName(),
+                                        capitalize(table.getName()))
+                                .beginControlFlow("if ($L == null)", table.getName())
+                                .addStatement("$L = new org.dbdesktop.orm.$L(null)", table.getName(), capitalize(table.getName()))
+                                .addStatement("$L.setPK_ID(0)", table.getName())
+                                .endControlFlow()
+                                .add("// TODO: load widget values → dbObject fields\n")
+                                .addStatement("return saveDbRecord($L, isNew)", table.getName())
+                                .build())
+                        .build(),
+                MethodSpec.methodBuilder("freeResources")
+                        .addAnnotation(Override.class)
+                        .addModifiers(Modifier.PUBLIC)
+                        .returns(void.class)
+                        .addCode(CodeBlock.builder()
+                                .add("// TODO: cleanup code\n")
+                                .build())
+                        .build()
+        );
     }
 
     private void generateMainFrame(String dbName, String packageName, String outFolder) throws Exception {
