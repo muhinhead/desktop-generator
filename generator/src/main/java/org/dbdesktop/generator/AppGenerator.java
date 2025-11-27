@@ -126,8 +126,8 @@ public class AppGenerator implements IClassesGenerator {
                 .addStatement("maxWidths.put(0, 50)")
                 .build();
 
-        for (String tableName : Table.allTables.keySet()) {
-            String gridClassName = capitalize(tableName) + "Grid";
+        for (Table table : Table.allTables.values()) {
+            String gridClassName = capitalize(table.getName()) + "Grid";
 
             System.out.println("Generating " + gridClassName);
 
@@ -135,16 +135,18 @@ public class AppGenerator implements IClassesGenerator {
                     .addModifiers(Modifier.PUBLIC)
                     .addParameter(ClassName.get(IMessageSender.class), "exchanger")
                     .addException(ClassName.get(RemoteException.class))
-                    .addStatement("super(exchanger,\"select * from " + tableName + " limit 10000\", maxWidths, false)")
+                    .addStatement("super(exchanger,\"select * from " + table.getName() + " limit 10000\", maxWidths, false)")
                     .build();
 
-            String editPanelClass = "Edit"+capitalize(tableName)+"Panel";
+            // TODO: How to get rid of this hardcoded package name (org.dbdesktop.orm.)
+            String recordItemClass = "org.dbdesktop.orm." + capitalize(table.getName());
+            String editPanelClass = "Edit" + capitalize(table.getName()) + "Panel";
 
             MethodSpec addAction = MethodSpec.methodBuilder("addAction")
                     .addModifiers(Modifier.PROTECTED)
                     .addAnnotation(Override.class)
                     .returns(AbstractAction.class)
-                    .addStatement("return new $T($S) {\n"
+                    .addStatement(    "   return new $T($S) {\n"
                                     + "    @Override\n"
                                     + "    public void actionPerformed($T e) {\n"
                                     + "        try {\n"
@@ -166,7 +168,92 @@ public class AppGenerator implements IClassesGenerator {
                             editPanelClass,
                             GenericEditDialog.class,
                             editPanelClass,
-                            "Add "+capitalize(tableName),
+                            "Add " + capitalize(table.getHeader()),
+                            GeneralFrame.class,
+                            RemoteException.class,
+                            ExchangeFactory.class,
+                            GeneralUtils.class,
+                            GeneralUtils.class
+                    )
+                    .build();
+
+            MethodSpec editAction = MethodSpec.methodBuilder("editAction")
+                    .addModifiers(Modifier.PROTECTED)
+                    .addAnnotation(Override.class)
+                    .returns(AbstractAction.class)
+                    .addStatement("   return new $T($S) {\n"
+                                    + "    @Override\n"
+                                    + "    public void actionPerformed($T e) {\n"
+                                    + "        int id = getSelectedID();\n"
+                                    + "        if (id > 0) {\n"
+                                    + "            try {\n"
+                                    + "                $L $L = ($L) exchanger.loadDbObjectOnID($L.class, id);\n"
+                                    + "                $T<$L> dlg = new $T<>($L.class, $S, null);\n"
+                                    + "                if (dlg.isOkPressed()) {\n"
+                                    + "                    $T.updateGrid(exchanger, getTableView(),\n"
+                                    + "                            getTableDoc(), getSelect(), id, getPageSelector().getSelectedIndex());\n"
+                                    + "                }\n"
+                                    + "            } catch ($T ex) {\n"
+                                    + "                $T.getPropLogEngine().log(ex);\n"
+                                    + "                $T.errMessageBox($T.ERROR, ex.getMessage());\n"
+                                    + "            }\n"
+                                    + "        }\n"
+                                    + "    }\n"
+                                    + "}",
+                            AbstractAction.class,
+                            "Edit",
+                            ActionEvent.class,
+                            recordItemClass,
+                            table.getName(),
+                            recordItemClass,
+                            recordItemClass,
+                            GenericEditDialog.class,
+                            editPanelClass,
+                            GenericEditDialog.class,
+                            editPanelClass,
+                            "Edit " + capitalize(table.getHeader()),
+                            GeneralFrame.class,
+                            RemoteException.class,
+                            ExchangeFactory.class,
+                            GeneralUtils.class,
+                            GeneralUtils.class
+                    )
+                    .build();
+
+            MethodSpec delAction = MethodSpec.methodBuilder("delAction")
+                    .addModifiers(Modifier.PROTECTED)
+                    .addAnnotation(Override.class)
+                    .returns(AbstractAction.class)
+                    .addStatement("   return new $T($S) {\n"
+                                    + "    @Override\n"
+                                    + "    public void actionPerformed($T e) {\n"
+                                    + "        int id = getSelectedID();\n"
+                                    + "        if (id > 0) {\n"
+                                    + "            try {\n"
+                                    + "                $L $L = ($L) exchanger.loadDbObjectOnID($L.class, id);\n"
+                                    + "                if($L != null && $T.yesNo(\"Attention!\", \"Do you want to delete the record?\") == $T.YES_OPTION) {\n"
+                                    + "                    exchanger.deleteObject($L);\n"
+                                    + "                    $T.updateGrid(exchanger, getTableView(),\n"
+                                    + "                            getTableDoc(), getSelect(), id, getPageSelector().getSelectedIndex());\n"
+                                    + "                }\n"
+                                    + "            } catch ($T ex) {\n"
+                                    + "                $T.getPropLogEngine().log(ex);\n"
+                                    + "                $T.errMessageBox($T.ERROR, ex.getMessage());\n"
+                                    + "            }\n"
+                                    + "        }\n"
+                                    + "    }\n"
+                                    + "}",
+                            AbstractAction.class,
+                            "Delete",
+                            ActionEvent.class,
+                            recordItemClass,
+                            table.getName(),
+                            recordItemClass,
+                            recordItemClass,
+                            table.getName(),
+                            GeneralUtils.class,
+                            JOptionPane.class,
+                            table.getName(),
                             GeneralFrame.class,
                             RemoteException.class,
                             ExchangeFactory.class,
@@ -183,6 +270,8 @@ public class AppGenerator implements IClassesGenerator {
                     .addStaticBlock(staticBlock)
                     .addMethod(constructor)
                     .addMethod(addAction)
+                    .addMethod(editAction)
+                    .addMethod(delAction)
                     .build();
             JavaFile javaFile = JavaFile.builder(packageName, gridClass)
                     .build();
@@ -194,15 +283,15 @@ public class AppGenerator implements IClassesGenerator {
     private void generateEditPanels(String packageName, String outFolder) throws Exception {
         for (Table table : Table.allTables.values()) {
             //ClassName myImport = ClassName.get("org.dbdesktop.orm", capitalize(table.getName()));
-            TypeSpec editPanelClass = TypeSpec.classBuilder("Edit"+capitalize(table.getName())+"Panel")
+            TypeSpec editPanelClass = TypeSpec.classBuilder("Edit" + capitalize(table.getName()) + "Panel")
                     .addModifiers(Modifier.PUBLIC)
                     .superclass(RecordEditPanel.class)
                     .addMethods(getEditPanelsMethods(table))
                     .build();
 
-                    JavaFile javaFile = JavaFile.builder(packageName, editPanelClass)
-                            //.addStaticImport(myImport)
-                            .build();
+            JavaFile javaFile = JavaFile.builder(packageName, editPanelClass)
+                    //.addStaticImport(myImport)
+                    .build();
             javaFile.writeTo(Paths.get(outFolder));
         }
     }
@@ -346,15 +435,15 @@ public class AppGenerator implements IClassesGenerator {
                             .addModifiers(Modifier.PUBLIC)
                             .returns(void.class)
                             .addParameter(ClassName.get("java.awt.event", "ActionEvent"), "e")
-                            .addStatement("if (item"+n+".isSelected()) {")
-                            .addStatement("    mainTabPanel.addTab(get$LPanel(), sheetList["+n+"])", capitalize(table.getName()))
+                            .addStatement("if (item" + n + ".isSelected()) {")
+                            .addStatement("    mainTabPanel.addTab(get$LPanel(), sheetList[" + n + "])", capitalize(table.getName()))
                             .addStatement("} else {")
                             .addStatement("    mainTabPanel.remove(get$LPanel())", capitalize(table.getName()))
                             .addStatement("}")
                             .build())
                     .build();
 
-            cb.addStatement("item"+n+".addActionListener($L)", actionListener);
+            cb.addStatement("item" + n + ".addActionListener($L)", actionListener);
             n++;
         }
         return cb.build();
