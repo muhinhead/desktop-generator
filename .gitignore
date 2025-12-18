@@ -3,6 +3,21 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+# =============================
+# Java
+# =============================
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+
+# =============================
+# Maven
+# =============================
+target/
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+
 ### IntelliJ IDEA ###
 .idea/modules.xml
 .idea/jarRepositories.xml
@@ -35,4 +50,6 @@ build/
 .vscode/
 
 ### Mac OS ###
-.DS_Store
+.DS_Storegit_token
+
+git_token
