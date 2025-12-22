@@ -133,10 +133,14 @@ public class ORMGenerator implements IClassesGenerator {
                     String colName = colNameType.substring(0, pointIndex);
                     codeBlock.add("$L\"$L\"", n > 0 ? ", " : "", colName);
                     codeBlock1.addStatement("this.$L = $L", colName, colName);
-                    codeBlock2.addStatement("$L.set$L(rs.get$L(" + (n + 1) + "))", table, DbObject.capitalizedString(colName),
-                            getSqlType(colNameType).getJavaType().getSimpleName()
-                                    .replace("Integer", "Int")
-                    );
+                    if(getSqlType(colNameType).getJavaType().getSimpleName().equals("byte[]")) {
+                        codeBlock2.addStatement("$L.set$L((byte[])rs.getObject(" + (n + 1) + "))", table, DbObject.capitalizedString(colName));
+                    } else {
+                        codeBlock2.addStatement("$L.set$L(rs.get$L(" + (n + 1) + "))", table, DbObject.capitalizedString(colName),
+                                getSqlType(colNameType).getJavaType().getSimpleName()
+                                        .replace("Integer", "Int")
+                        );
+                    }
                     if (n > 0) {
                         columnsList.append(", ");
                         insertSQL.append(n > 1 ? "," : "\"").append(colName);

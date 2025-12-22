@@ -38,6 +38,7 @@ public class MySqlType extends AbstractSqlType {
         sql2java.put("bigint", Integer.class);
         sql2java.put("bit", Integer.class);
         sql2java.put("smallint", Integer.class);
+        sql2java.put("mediumint", Integer.class);
         sql2java.put("tinyint", Integer.class);
         sql2java.put("numeric", Integer.class);
         sql2java.put("number", Integer.class);
@@ -63,6 +64,9 @@ public class MySqlType extends AbstractSqlType {
         sql2java.put("longblob", Object.class);
         sql2java.put("mediumblob", Object.class);
         sql2java.put("other", Object.class);
+        sql2java.put("geometry", byte[].class);
+        sql2java.put("enum", Object.class);
+        sql2java.put("set", Object.class);
     }
 
     public MySqlType(String sqlType) {
