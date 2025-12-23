@@ -37,6 +37,7 @@ public abstract class AbstractSqlType {
     public void setSqlType(String sqlType) {
         this.sqlType = sqlType;
         javaType = sql2java.get(sqlType);
+//        System.out.println("TYPEMAP: "+toString());
     }
 
     public Class getJavaType() {

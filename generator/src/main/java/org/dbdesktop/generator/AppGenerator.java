@@ -52,6 +52,7 @@ public class AppGenerator implements IClassesGenerator {
         System.out.println("Version: " + meta.getDatabaseProductName());
         System.out.println("Driver: " + meta.getDriverName());
 
+        // TODO: get rid of this hardcoded package name (org.dbdesktop.app.)
         this.packageName = "org.dbdesktop.app." + dbName;
 
         MethodSpec mainMethod = MethodSpec.methodBuilder("main")
