@@ -1,6 +1,7 @@
 package org.dbdesktop.generator;
 
 import com.squareup.javapoet.*;
+import org.dbdesktop.dbstructure.Column;
 import org.dbdesktop.dbstructure.DbClientDataSender;
 import org.dbdesktop.dbstructure.Table;
 import org.dbdesktop.guiutil.*;
@@ -304,6 +305,7 @@ public class AppGenerator implements IClassesGenerator {
                         .addModifiers(Modifier.PROTECTED)
                         .returns(void.class)
                         .addCode(CodeBlock.builder()
+                                .add(buildLabelsArray(table))
                                 .add("// TODO: Add widget building UI code here\n")
                                 .build())
                         .build(),
@@ -353,6 +355,22 @@ public class AppGenerator implements IClassesGenerator {
                                 .build())
                         .build()
         );
+    }
+
+    private CodeBlock buildLabelsArray(Table table) {
+        CodeBlock.Builder cb = CodeBlock.builder();
+        cb.add("String[] titles = new String[] {\n");
+        int n = 0;
+        for(Column col: table.getColumns()) {
+            if(n>0) {
+                cb.add(",\n");
+            }
+            cb.add("\"$L: \"", col.getHeader());
+            n++;
+        }
+        cb.add("\n");
+        cb.addStatement("}");
+        return cb.build();
     }
 
     private void generateMainFrame(String dbName, String packageName, String outFolder) throws Exception {
