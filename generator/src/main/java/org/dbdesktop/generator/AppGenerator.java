@@ -288,6 +288,7 @@ public class AppGenerator implements IClassesGenerator {
             TypeSpec editPanelClass = TypeSpec.classBuilder("Edit" + capitalize(table.getName()) + "Panel")
                     .addModifiers(Modifier.PUBLIC)
                     .superclass(RecordEditPanel.class)
+                    .addFields(getFiledWidgets(table))
                     .addMethods(getEditPanelsMethods(table))
                     .build();
 
@@ -298,6 +299,14 @@ public class AppGenerator implements IClassesGenerator {
         }
     }
 
+    private List<FieldSpec> getFiledWidgets(Table table) {
+        List<FieldSpec> fields = new ArrayList<>(table.getColumns().size());
+        for(Column column: table.getColumns()) {
+            fields.add(FieldSpec.builder(JTextField.class, column.getJavaName()+"Field").build());
+        }
+        return fields;
+    }
+
     private List<MethodSpec> getEditPanelsMethods(Table table) {
         return List.of(
                 MethodSpec.methodBuilder("fillContent")
@@ -306,6 +315,7 @@ public class AppGenerator implements IClassesGenerator {
                         .returns(void.class)
                         .addCode(CodeBlock.builder()
                                 .add(buildLabelsArray(table))
+                                .add(buildEditComponents(table))
                                 .add("// TODO: Add widget building UI code here\n")
                                 .build())
                         .build(),
@@ -355,6 +365,30 @@ public class AppGenerator implements IClassesGenerator {
                                 .build())
                         .build()
         );
+    }
+
+    private CodeBlock buildEditComponents(Table table) {
+        CodeBlock.Builder cb = CodeBlock.builder();
+        cb.beginControlFlow("$T[] edits = new $T[]", JComponent.class, JComponent.class);
+        int c = 0;
+        int pkNum = 0;
+        for(Column col: table.getColumns()) {
+            if(col.isPrimary()) {
+                pkNum = c;
+            }
+            if(c > 0) {
+                cb.add(",\n");
+            }
+            cb.add("getBorderPanel(new $T[]{$L = new $T($L)})", JComponent.class, col.getJavaName()+"Field",
+                    JTextField.class, col.getLength() == 0 ? 7 : col.getLength());
+            c++;
+        }
+        cb.add("\n");
+        cb.endControlFlow();
+        cb.addStatement("");
+        cb.addStatement("$LField.setEnabled(false)", table.getColumns().get(pkNum).getJavaName());
+        cb.addStatement("organizePanels(titles, edits, null)");
+        return cb.build();
     }
 
     private CodeBlock buildLabelsArray(Table table) {
