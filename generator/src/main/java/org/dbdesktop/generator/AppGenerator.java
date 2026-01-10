@@ -3,6 +3,7 @@ package org.dbdesktop.generator;
 import com.squareup.javapoet.*;
 import org.dbdesktop.dbstructure.Column;
 import org.dbdesktop.dbstructure.DbClientDataSender;
+import org.dbdesktop.dbstructure.ForeignKey;
 import org.dbdesktop.dbstructure.Table;
 import org.dbdesktop.guiutil.*;
 import org.dbdesktop.orm.ExchangeFactory;
@@ -302,9 +303,31 @@ public class AppGenerator implements IClassesGenerator {
     private List<FieldSpec> getFiledWidgets(Table table) {
         List<FieldSpec> fields = new ArrayList<>(table.getColumns().size());
         for(Column column: table.getColumns()) {
-            fields.add(FieldSpec.builder(JTextField.class, column.getJavaName()+"Field").build());
+            Table tableTo = getReferencedTableByForeignKey(table, column);
+            if (tableTo != null) {
+                fields.add(FieldSpec.builder(JComboBox.class, column.getJavaName() + "Box")
+                                .addModifiers(Modifier.PRIVATE)
+                        .build());
+                fields.add(FieldSpec.builder(DefaultComboBoxModel.class, column.getJavaName() + "CBmodel")
+                        .addModifiers(Modifier.PRIVATE)
+                        .build());
+            } else {
+                fields.add(FieldSpec.builder(JTextField.class, column.getJavaName() + "Field").build());
+            }
         }
         return fields;
+    }
+
+    private Table getReferencedTableByForeignKey(Table table, Column column) {
+        return Table.allTables.values().stream()
+                .flatMap(tb -> tb.getForeignKeys().stream())
+                .filter(fk ->
+                        fk.getTableFrom().equals(table) &&
+                                fk.getFkColumn().equals(column)
+                )
+                .map(ForeignKey::getTableTo)
+                .findFirst()
+                .orElse(null);
     }
 
     private List<MethodSpec> getEditPanelsMethods(Table table) {
