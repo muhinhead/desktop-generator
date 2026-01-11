@@ -304,30 +304,35 @@ public class AppGenerator implements IClassesGenerator {
         List<FieldSpec> fields = new ArrayList<>(table.getColumns().size());
         for(Column column: table.getColumns()) {
             Table tableTo = getReferencedTableByForeignKey(table, column);
-            if (tableTo != null) {
+            if (tableTo == null) {
+                fields.add(FieldSpec.builder(JTextField.class, column.getJavaName() + "Field").build());
+            } else {
                 fields.add(FieldSpec.builder(JComboBox.class, column.getJavaName() + "Box")
                                 .addModifiers(Modifier.PRIVATE)
                         .build());
                 fields.add(FieldSpec.builder(DefaultComboBoxModel.class, column.getJavaName() + "CBmodel")
                         .addModifiers(Modifier.PRIVATE)
+                        .initializer("new $T()", DefaultComboBoxModel.class)
                         .build());
-            } else {
-                fields.add(FieldSpec.builder(JTextField.class, column.getJavaName() + "Field").build());
             }
         }
         return fields;
     }
 
     private Table getReferencedTableByForeignKey(Table table, Column column) {
-        return Table.allTables.values().stream()
-                .flatMap(tb -> tb.getForeignKeys().stream())
-                .filter(fk ->
-                        fk.getTableFrom().equals(table) &&
-                                fk.getFkColumn().equals(column)
-                )
-                .map(ForeignKey::getTableTo)
-                .findFirst()
-                .orElse(null);
+        if (column.isPrimary()) {
+            return null;
+        } else {
+            return Table.allTables.values().stream()
+                    .flatMap(tb -> tb.getForeignKeys().stream())
+                    .filter(fk ->
+                            fk.getTableFrom().equals(table) &&
+                                    fk.getFkColumn().equals(column)
+                    )
+                    .map(ForeignKey::getTableTo)
+                    .findFirst()
+                    .orElse(null);
+        }
     }
 
     private List<MethodSpec> getEditPanelsMethods(Table table) {
@@ -402,14 +407,21 @@ public class AppGenerator implements IClassesGenerator {
             if(c > 0) {
                 cb.add(",\n");
             }
-            cb.add("getBorderPanel(new $T[]{$L = new $T($L)})", JComponent.class, col.getJavaName()+"Field",
-                    JTextField.class, col.getLength() == 0 ? 7 : col.getLength());
+            Table ft = getReferencedTableByForeignKey(table, col);
+            if(ft == null || col.isPrimary()) {
+                cb.add("getBorderPanel(new $T[]{$L = new $T($L)})", JComponent.class, col.getJavaName() + "Field",
+                        JTextField.class, col.getLength() == 0 ? 7 : col.getLength());
+            } else {
+                cb.add("getBorderPanel(new $T[]{$L = new $T($L)})", JComponent.class, col.getJavaName() + "Box",
+                        JComboBox.class, col.getJavaName() + "CBmodel");
+            }
             c++;
         }
         cb.add("\n");
         cb.endControlFlow();
         cb.addStatement("");
-        cb.addStatement("$LField.setEnabled(false)", table.getColumns().get(pkNum).getJavaName());
+        Column pkCol = table.getColumns().get(pkNum);
+        cb.addStatement("$LField.setEnabled(false)", pkCol.getJavaName());
         cb.addStatement("organizePanels(titles, edits, null)");
         return cb.build();
     }
